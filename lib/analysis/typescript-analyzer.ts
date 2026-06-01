@@ -538,10 +538,10 @@ export function findPropertyUsages(
         const typeName = node.getTypeName()
         if (Node.isIdentifier(typeName) && typeName.getText() === name) {
           // Skip if inside an import declaration
-          let parent = node.getParent()
+          let parent: Node | undefined = node.getParent()
           while (parent) {
             if (Node.isImportDeclaration(parent) || Node.isExportDeclaration(parent)) return
-            parent = parent.getParent()
+            parent = parent.getParent() ?? undefined
           }
           add(typeName.getStartLineNumber(), typeName.getStartLinePos(), 'type_annotation')
         }
