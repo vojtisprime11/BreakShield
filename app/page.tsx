@@ -1,6 +1,7 @@
 import styles from './page.module.css'
 
 const INSTALL_URL = 'https://github.com/apps/breakshield-ci'
+// App URL: https://breakshield-ci.vercel.app
 
 export default function Home() {
   return (
