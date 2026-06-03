@@ -49,11 +49,13 @@ export default function Home() {
         </p>
 
         <div className={styles.heroCtas}>
-          <a href={INSTALL_URL} className={styles.btnPrimary} target="_blank" rel="noopener">
-            <GithubIcon />
-            Install on GitHub — it&apos;s free
+          <a href="/analyze" className={styles.btnPrimary}>
+            ⚡ Try demo — no install needed
           </a>
-          <a href="#how" className={styles.btnGhost}>See how it works ↓</a>
+          <a href={INSTALL_URL} className={styles.btnGhost} target="_blank" rel="noopener">
+            <GithubIcon />
+            Install on GitHub
+          </a>
         </div>
 
         <div className={styles.heroStats}>
