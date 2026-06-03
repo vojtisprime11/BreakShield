@@ -527,3 +527,12 @@
   transition: color 0.15s, border-color 0.15s;
 }
 .navLinkBtn:hover { color: var(--text); border-color: var(--border2); }
+
+/* ══ Nav dashboard link ══ */
+.navLinkBtn {
+  font-size: 13px; color: var(--muted2); font-weight: 600;
+  padding: 7px 12px; border-radius: 7px;
+  border: 1px solid var(--border);
+  transition: border-color 0.15s, color 0.15s;
+}
+.navLinkBtn:hover { border-color: rgba(91,141,238,0.4); color: var(--text); }
