@@ -323,11 +323,39 @@ export default function Home() {
         <div className={styles.glow3} />
         <div className={styles.inner} style={{textAlign:'center', position:'relative'}}>
           <h2 className={styles.ctaTitle}>Your next breaking change<br />is already in a PR</h2>
-          <p className={styles.ctaSub}>Install BreakShield CI in 30 seconds. Free during beta.</p>
-          <a href={INSTALL_URL} className={styles.btnPrimary} target="_blank" rel="noopener">
-            <GithubIcon />
-            Install on GitHub — it&apos;s free
-          </a>
+          <p className={styles.ctaSub}>Try the instant demo — no install needed. Or install and get automatic checks on every PR.</p>
+          <div style={{display:'flex', gap:'12px', justifyContent:'center', flexWrap:'wrap'}}>
+            <a href="/analyze" className={styles.btnPrimary}>
+              ⚡ Try demo free
+            </a>
+            <a href={INSTALL_URL} className={styles.btnGhost} target="_blank" rel="noopener">
+              <GithubIcon />
+              Install GitHub App
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section className={styles.section} id="faq">
+        <div className={styles.inner}>
+          <div className={styles.sectionLabel}>FAQ</div>
+          <h2 className={styles.sectionTitle}>Common questions</h2>
+          <div className={styles.faqGrid}>
+            {[
+              { q: 'Does it work on private repositories?', a: 'Yes — after you install the GitHub App, it works on both public and private repositories. The demo on this page only works with public repos.' },
+              { q: 'Does it slow down my CI pipeline?', a: 'No. BreakShield CI runs in the background after your PR is opened. Your CI pipeline is not affected.' },
+              { q: 'What permissions does it need?', a: 'Read access to pull requests and repository contents. It never writes to your code — only posts a comment and a Check Run.' },
+              { q: 'Does it catch all breaking changes?', a: 'It catches structural breaking changes in TypeScript interfaces and OpenAPI specs with high confidence. Logic errors or runtime issues are outside scope.' },
+              { q: 'How is it different from TypeScript compiler errors?', a: 'TypeScript only checks within a single build. BreakShield CI diffs across commits and finds cross-file consumer usages that TypeScript would miss.' },
+              { q: 'Is it free?', a: 'Yes — completely free during beta. No credit card, no limits.' },
+            ].map(faq => (
+              <div key={faq.q} className={styles.faqItem}>
+                <div className={styles.faqQ}>{faq.q}</div>
+                <div className={styles.faqA}>{faq.a}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
