@@ -17,6 +17,7 @@ export default function Home() {
             <a href="#how">How it works</a>
             <a href="#features">Features</a>
             <a href="#pricing">Pricing</a>
+            <a href="/blog">Blog</a>
           </div>
           <a href={INSTALL_URL} className={styles.navCta} target="_blank" rel="noopener">
             Install free →

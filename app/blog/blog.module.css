@@ -1,0 +1,20 @@
+.main { min-height: 100vh; padding: 80px 24px; background: var(--bg); }
+.inner { max-width: 720px; margin: 0 auto; }
+.back { font-size: 14px; color: var(--muted2); transition: color 0.15s; display: inline-block; margin-bottom: 48px; }
+.back:hover { color: var(--text); }
+.title { font-size: 48px; font-weight: 800; letter-spacing: -2px; margin-bottom: 12px; }
+.sub { font-size: 16px; color: var(--muted2); margin-bottom: 56px; }
+.posts { display: flex; flex-direction: column; gap: 24px; }
+.post {
+  display: block;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.post:hover { border-color: var(--border2); transform: translateY(-2px); }
+.postMeta { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.postTitle { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 10px; }
+.postDesc { font-size: 15px; color: var(--muted2); line-height: 1.6; margin-bottom: 16px; }
+.readMore { font-size: 14px; color: var(--accent); font-weight: 600; }
