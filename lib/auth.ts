@@ -79,7 +79,6 @@ export function clearSessionCookie(res: NextResponse): NextResponse {
 export function getGitHubAuthUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID!,
-    redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`,
     scope: 'read:user read:org',
     state,
   })
