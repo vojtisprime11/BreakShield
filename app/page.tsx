@@ -19,9 +19,12 @@ export default function Home() {
             <a href="#pricing">Pricing</a>
             <a href="/blog">Blog</a>
           </div>
-          <a href={INSTALL_URL} className={styles.navCta} target="_blank" rel="noopener">
-            Install free →
-          </a>
+          <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+            <a href="/dashboard" className={styles.navLinkBtn}>Dashboard</a>
+            <a href={INSTALL_URL} className={styles.navCta} target="_blank" rel="noopener">
+              Install free →
+            </a>
+          </div>
         </div>
       </nav>
 

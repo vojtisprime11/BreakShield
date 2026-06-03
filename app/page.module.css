@@ -518,3 +518,12 @@
 @media (max-width: 700px) {
   .faqGrid { grid-template-columns: 1fr; }
 }
+
+/* ══ Nav link button ══ */
+.navLinkBtn {
+  font-size: 14px; color: var(--muted2);
+  padding: 7px 14px; border-radius: 8px;
+  border: 1px solid var(--border);
+  transition: color 0.15s, border-color 0.15s;
+}
+.navLinkBtn:hover { color: var(--text); border-color: var(--border2); }
