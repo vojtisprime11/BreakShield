@@ -376,10 +376,18 @@ export default function DashboardClient({ user }: { user: User }) {
                 <div className={styles.notAnalyzed}>
                   <div className={styles.notAnalyzedIcon}>🔍</div>
                   <h3>Not analyzed yet</h3>
-                  <p>Push a commit to this PR to trigger analysis, or use the instant analyzer.</p>
-                  <Link href={`/analyze?url=${encodeURIComponent(selectedPr.url)}`} className={styles.btnPrimary}>
-                    Analyze now →
-                  </Link>
+                  <p>Push a commit to trigger automatic analysis, or click below to analyze now.</p>
+                  <AnalyzeNowButton
+                    owner={selectedRepo.owner}
+                    repo={selectedRepo.name}
+                    prNumber={selectedPr.number}
+                    prUrl={selectedPr.url}
+                    onDone={(r) => {
+                      setSelectedPr({ ...selectedPr, analyzed: true, riskLevel: r.risk?.riskLevel ?? null, riskScore: r.risk?.riskScore ?? null, breakingCount: r.risk?.breakingCount ?? null, consumersAffected: r.risk?.totalConsumersAffected ?? null, analysisStatus: 'completed', durationMs: r.durationMs ?? null, filesAnalyzed: r.filesAnalyzed ?? null })
+                      setFindings(r.findings ?? [])
+                      setRisk(r.risk ?? null)
+                    }}
+                  />
                 </div>
               ) : (
                 <>
@@ -501,5 +509,46 @@ function ShieldIcon() {
       <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       <defs><linearGradient id="shd" x1="3" y1="2" x2="21" y2="23" gradientUnits="userSpaceOnUse"><stop stopColor="#5b8dee"/><stop offset="1" stopColor="#8b5cf6"/></linearGradient></defs>
     </svg>
+  )
+}
+
+function AnalyzeNowButton({ owner, repo, prNumber, prUrl, onDone }: {
+  owner: string; repo: string; prNumber: number; prUrl: string;
+  onDone: (result: any) => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+
+  async function run() {
+    setLoading(true); setError('')
+    try {
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner, repo, prNumber }),
+      })
+      const data = await resp.json()
+      if (!resp.ok || data.error) {
+        setError(data.error ?? 'Analysis failed')
+      } else {
+        onDone(data)
+      }
+    } catch {
+      setError('Network error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <button className={styles.btnPrimary} onClick={run} disabled={loading}>
+        {loading ? '⏳ Analyzing…' : '⚡ Analyze now'}
+      </button>
+      {error && <p style={{color:'#f43f5e',fontSize:'13px',marginTop:'10px'}}>{error}</p>}
+      <p style={{fontSize:'13px',color:'var(--muted2)',marginTop:'10px'}}>
+        Or <a href={prUrl} target="_blank" rel="noopener" style={{color:'var(--accent)'}}>push a commit</a> to trigger automatic analysis.
+      </p>
+    </div>
   )
 }

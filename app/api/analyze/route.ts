@@ -1,30 +1,29 @@
 /**
  * app/api/analyze/route.ts
  *
- * Public analysis endpoint — no GitHub App auth required.
- * Works with any public GitHub repository via unauthenticated API.
+ * Analysis endpoint — works three ways:
+ *   1. Authenticated user (GitHub OAuth session) — private + public repos
+ *   2. Public PR URL — unauthenticated, public repos only
+ *   3. Demo mode — hardcoded real PR
  *
  * POST /api/analyze
- * Body: { prUrl: string } | { demo: true }
+ * Body: { prUrl: string } | { demo: true } | { owner, repo, prNumber, installationId? }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { Octokit } from '@octokit/rest'
+import { getSession } from '@/lib/auth'
+import { getInstallationOctokit } from '@/lib/github/client'
 import { analyzeTypeScriptFile, shouldAnalyzeFile } from '@/lib/analysis/typescript-analyzer'
 import { analyzeOpenAPIFile, isOpenAPIFile } from '@/lib/analysis/openapi-analyzer'
 import { filterByConfidence } from '@/lib/analysis/confidence'
 import { calculateRisk } from '@/lib/analysis/risk-engine'
+import { enrichWithEvidence } from '@/lib/analysis/consumer-finder'
 import type { Finding, AnalysisError, FileVersion } from '@/lib/analysis/types'
-
-// Unauthenticated Octokit — 60 req/hour, enough for demo
-const octokit = new Octokit()
-
-// ─── Demo data — real PR from breakshield test repo ──────────────────────────
+import { randomUUID } from 'crypto'
 
 const DEMO_PR = {
-  owner: 'vojtisprime11',
-  repo: 'BreakShield-test',
-  prNumber: 10,
+  owner: 'vojtisprime11', repo: 'BreakShield-test', prNumber: 10,
   title: 'refactor: clean up UserResponse API, remove deprecated createdAt field',
 }
 
@@ -32,10 +31,11 @@ const DEMO_PR = {
 
 function parsePRUrl(url: string): { owner: string; repo: string; prNumber: number } | null {
   try {
-    const u = new URL(url)
+    // Handle both http and https, with or without www
+    const normalized = url.trim().replace(/^(?!https?:\/\/)/, 'https://')
+    const u = new URL(normalized)
     if (!u.hostname.includes('github.com')) return null
     const parts = u.pathname.split('/').filter(Boolean)
-    // Expected: ['owner', 'repo', 'pull', '123']
     if (parts.length < 4 || parts[2] !== 'pull') return null
     const prNumber = parseInt(parts[3]!, 10)
     if (isNaN(prNumber)) return null
@@ -45,15 +45,18 @@ function parsePRUrl(url: string): { owner: string; repo: string; prNumber: numbe
   }
 }
 
-// ─── Fetch file content without auth ─────────────────────────────────────────
+// ─── Fetch file at ref ────────────────────────────────────────────────────────
 
-async function fetchFileAt(owner: string, repo: string, path: string, ref: string): Promise<string | null> {
+async function fetchFileAt(
+  octokit: Octokit,
+  owner: string, repo: string, path: string, ref: string
+): Promise<string | null> {
   try {
     const resp = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
       owner, repo, path, ref,
     })
     const data = resp.data as { content?: string; encoding?: string; size?: number }
-    if ((data.size ?? 0) > 100_000) return null
+    if ((data.size ?? 0) > 150_000) return null
     if (data.content && data.encoding === 'base64') {
       return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf-8')
     }
@@ -63,144 +66,199 @@ async function fetchFileAt(owner: string, repo: string, path: string, ref: strin
   }
 }
 
-// ─── Main handler ─────────────────────────────────────────────────────────────
+// ─── Core analysis ────────────────────────────────────────────────────────────
+
+async function runAnalysis(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  withEvidence: boolean,
+  traceId: string,
+) {
+  const start = Date.now()
+
+  // 1. PR metadata
+  const prResp = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
+    owner, repo, pull_number: prNumber,
+  })
+  const prData = prResp.data as any
+  const baseSha    = prData.base.sha as string
+  const headSha    = prData.head.sha as string
+  const baseBranch = prData.base.ref as string
+  const headBranch = prData.head.ref as string
+  const prTitle    = prData.title as string
+  const prUrl      = prData.html_url as string
+  const prState    = prData.state as string
+  const prAuthor   = prData.user?.login as string
+
+  // 2. Changed files
+  const filesResp = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
+    owner, repo, pull_number: prNumber, per_page: 100,
+  })
+  const allFiles = filesResp.data as any[]
+  const analyzableFiles = allFiles.filter(f =>
+    shouldAnalyzeFile(f.filename) || isOpenAPIFile(f.filename)
+  )
+
+  if (analyzableFiles.length === 0) {
+    return {
+      ok: true, prTitle, prUrl, prState, prAuthor, baseBranch, headBranch,
+      findings: [], risk: calculateRisk([]),
+      filesAnalyzed: 0, totalFiles: allFiles.length,
+      durationMs: Date.now() - start,
+      message: `No TypeScript or OpenAPI files changed. ${allFiles.length} other file${allFiles.length !== 1 ? 's' : ''} changed.`,
+    }
+  }
+
+  // 3. Fetch before/after content in parallel
+  const fileVersions: FileVersion[] = await Promise.all(
+    analyzableFiles.slice(0, 25).map(async (f): Promise<FileVersion> => {
+      const [before, after] = await Promise.all([
+        f.status === 'added'   ? Promise.resolve(null) : fetchFileAt(octokit, owner, repo, f.filename, baseSha),
+        f.status === 'removed' ? Promise.resolve('')   : fetchFileAt(octokit, owner, repo, f.filename, headSha),
+      ])
+      return { path: f.filename, before, after }
+    })
+  )
+
+  // 4. Run AST analyzers
+  const errors: AnalysisError[] = []
+  const rawFindings: Omit<Finding, 'evidence'>[] = []
+
+  await Promise.all(fileVersions.map(async fv => {
+    if (fv.before === null) return
+    const beforeContent = fv.before
+    const afterContent  = fv.after ?? ''
+
+    if (shouldAnalyzeFile(fv.path)) {
+      const r = analyzeTypeScriptFile(fv.path, beforeContent, afterContent)
+      errors.push(...r.errors)
+      rawFindings.push(...r.findings)
+    } else if (isOpenAPIFile(fv.path)) {
+      const r = await analyzeOpenAPIFile(fv.path, beforeContent, afterContent)
+      errors.push(...r.errors)
+      rawFindings.push(...r.findings)
+    }
+  }))
+
+  // 5. Enrich with consumer evidence (only for authenticated users)
+  let findings: Finding[]
+  if (withEvidence && rawFindings.length > 0) {
+    try {
+      findings = await enrichWithEvidence(rawFindings, {
+        octokit, owner, repo,
+        repoFullName: `${owner}/${repo}`,
+        headSha, traceId,
+      })
+    } catch {
+      findings = rawFindings.map(f => ({ ...f, evidence: [] }))
+    }
+  } else {
+    findings = rawFindings.map(f => ({ ...f, evidence: [] }))
+  }
+
+  // 6. Filter noise + calculate risk
+  const filtered = filterByConfidence(findings)
+  const risk     = calculateRisk(filtered)
+
+  return {
+    ok: true,
+    prTitle, prUrl, prState, prAuthor,
+    baseBranch, headBranch,
+    findings: filtered,
+    risk,
+    filesAnalyzed:  fileVersions.length,
+    totalFiles:     allFiles.length,
+    durationMs:     Date.now() - start,
+    withEvidence,
+    errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
+  }
+}
+
+// ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   let body: any
+  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
+
+  const session = await getSession(req)
+  const traceId = randomUUID()
+
   try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-
-  // ── Resolve PR to analyze ──────────────────────────────────────────────
-  let owner: string
-  let repo: string
-  let prNumber: number
-  let prTitle: string
-
-  if (body.demo) {
-    owner = DEMO_PR.owner
-    repo = DEMO_PR.repo
-    prNumber = DEMO_PR.prNumber
-    prTitle = DEMO_PR.title
-  } else if (body.prUrl) {
-    const parsed = parsePRUrl(body.prUrl)
-    if (!parsed) {
-      return NextResponse.json({ error: 'Invalid GitHub PR URL. Expected format: https://github.com/owner/repo/pull/123' }, { status: 400 })
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    if (body.demo) {
+      const oct = session
+        ? new Octokit({ auth: session.accessToken })
+        : new Octokit()
+      const result = await runAnalysis(oct, DEMO_PR.owner, DEMO_PR.repo, DEMO_PR.prNumber, !!session, traceId)
+      return NextResponse.json({ ...result, isDemo: true })
     }
-    owner = parsed.owner
-    repo = parsed.repo
-    prNumber = parsed.prNumber
-    prTitle = `PR #${prNumber}`
-  } else {
-    return NextResponse.json({ error: 'Provide prUrl or demo: true' }, { status: 400 })
-  }
 
-  const start = Date.now()
+    // ── Direct params (from dashboard "Analyze now") ───────────────────────
+    if (body.owner && body.repo && body.prNumber) {
+      if (!session) return NextResponse.json({ error: 'Sign in to analyze private repositories' }, { status: 401 })
 
-  try {
-    // ── 1. Fetch PR metadata ───────────────────────────────────────────────
-    let prData: any
-    try {
-      const prResp = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
-        owner, repo, pull_number: prNumber,
-      })
-      prData = prResp.data
-      prTitle = prData.title ?? prTitle
-    } catch (e: any) {
-      if (e.status === 404) {
-        return NextResponse.json({ error: 'PR not found. Make sure the repository is public.' }, { status: 404 })
+      let oct: Octokit
+      if (body.installationId) {
+        try {
+          oct = await getInstallationOctokit(body.installationId) as unknown as Octokit
+        } catch {
+          oct = new Octokit({ auth: session.accessToken })
+        }
+      } else {
+        oct = new Octokit({ auth: session.accessToken })
       }
-      throw e
+
+      const result = await runAnalysis(oct, body.owner, body.repo, body.prNumber, true, traceId)
+      return NextResponse.json(result)
     }
 
-    const baseSha = prData.base.sha as string
-    const headSha = prData.head.sha as string
-    const baseBranch = prData.base.ref as string
-    const headBranch = prData.head.ref as string
+    // ── PR URL (public or authenticated) ──────────────────────────────────
+    if (body.prUrl) {
+      const parsed = parsePRUrl(body.prUrl)
+      if (!parsed) {
+        return NextResponse.json({
+          error: 'Invalid GitHub PR URL. Expected: https://github.com/owner/repo/pull/123',
+        }, { status: 400 })
+      }
 
-    // ── 2. Fetch changed files ─────────────────────────────────────────────
-    const filesResp = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
-      owner, repo, pull_number: prNumber, per_page: 50,
-    })
-    const changedFiles = (filesResp.data as any[]).filter(f =>
-      shouldAnalyzeFile(f.filename) || isOpenAPIFile(f.filename)
-    )
+      const oct = session
+        ? new Octokit({ auth: session.accessToken })
+        : new Octokit()
 
-    if (changedFiles.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        prTitle,
-        prUrl: `https://github.com/${owner}/${repo}/pull/${prNumber}`,
-        baseBranch,
-        headBranch,
-        findings: [],
-        risk: calculateRisk([]),
-        filesAnalyzed: 0,
-        durationMs: Date.now() - start,
-        message: 'No TypeScript or OpenAPI files changed in this PR.',
-      })
-    }
-
-    // ── 3. Fetch file versions ─────────────────────────────────────────────
-    const fileVersions: FileVersion[] = await Promise.all(
-      changedFiles.slice(0, 20).map(async (f): Promise<FileVersion> => {
-        const [before, after] = await Promise.all([
-          f.status === 'added' ? Promise.resolve(null) : fetchFileAt(owner, repo, f.filename, baseSha),
-          f.status === 'removed' ? Promise.resolve('') : fetchFileAt(owner, repo, f.filename, headSha),
-        ])
-        return { path: f.filename, before, after }
-      })
-    )
-
-    // ── 4. Run analyzers ───────────────────────────────────────────────────
-    const errors: AnalysisError[] = []
-    const allFindings: Omit<Finding, 'evidence'>[] = []
-
-    for (const fv of fileVersions) {
-      if (fv.before === null) continue
-      const beforeContent = fv.before
-      const afterContent = fv.after ?? ''
-
-      if (shouldAnalyzeFile(fv.path)) {
-        const result = analyzeTypeScriptFile(fv.path, beforeContent, afterContent)
-        errors.push(...result.errors)
-        allFindings.push(...result.findings)
-      } else if (isOpenAPIFile(fv.path)) {
-        const result = await analyzeOpenAPIFile(fv.path, beforeContent, afterContent)
-        errors.push(...result.errors)
-        allFindings.push(...result.findings)
+      try {
+        const result = await runAnalysis(oct, parsed.owner, parsed.repo, parsed.prNumber, !!session, traceId)
+        if (!session) {
+          return NextResponse.json({
+            ...result,
+            note: 'Sign in with GitHub to analyze private repos and get consumer evidence.',
+          })
+        }
+        return NextResponse.json(result)
+      } catch (e: any) {
+        if (e.status === 404) {
+          return NextResponse.json({
+            error: session
+              ? 'PR not found. Check that you have access to this repository.'
+              : 'PR not found. This may be a private repository — sign in to analyze it.',
+          }, { status: 404 })
+        }
+        throw e
       }
     }
 
-    // ── 5. Add empty evidence, filter, score risk ──────────────────────────
-    const withEvidence: Finding[] = allFindings.map(f => ({ ...f, evidence: [] }))
-    const filtered = filterByConfidence(withEvidence)
-    const risk = calculateRisk(filtered)
-
-    return NextResponse.json({
-      ok: true,
-      prTitle,
-      prUrl: `https://github.com/${owner}/${repo}/pull/${prNumber}`,
-      baseBranch,
-      headBranch,
-      findings: filtered,
-      risk,
-      filesAnalyzed: fileVersions.length,
-      durationMs: Date.now() - start,
-      errors: errors.length > 0 ? errors : undefined,
-      note: 'Consumer evidence requires GitHub App installation. Install BreakShield CI for full analysis.',
-    })
+    return NextResponse.json({ error: 'Provide prUrl, demo: true, or owner/repo/prNumber' }, { status: 400 })
 
   } catch (e: any) {
-    if (e.status === 403) {
-      return NextResponse.json({
-        error: 'GitHub API rate limit reached. Try again in a few minutes, or use a public PR with fewer files.',
-      }, { status: 429 })
+    if (e.status === 403 || e.status === 429) {
+      return NextResponse.json({ error: 'GitHub API rate limit reached. Try again in a minute.' }, { status: 429 })
+    }
+    if (e.status === 401) {
+      return NextResponse.json({ error: 'GitHub authentication failed. Sign in again.' }, { status: 401 })
     }
     return NextResponse.json({
-      error: 'Analysis failed. Make sure the repository is public.',
+      error: `Analysis failed: ${e.message ?? 'Unknown error'}`,
     }, { status: 500 })
   }
 }
