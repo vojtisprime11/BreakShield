@@ -75,10 +75,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         authorAvatar: pr.user?.avatar_url,
         baseBranch: pr.base?.ref,
         headBranch: pr.head?.ref,
+        headSha: pr.head?.sha ?? analysis?.head_sha ?? '',
         url: pr.html_url,
         createdAt: pr.created_at,
         updatedAt: pr.updated_at,
-        // Analysis results
         analyzed: !!analysis,
         riskLevel: risk?.risk_level ?? null,
         riskScore: risk?.risk_score ?? null,

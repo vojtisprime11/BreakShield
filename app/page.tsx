@@ -13,6 +13,7 @@ export default function Home() {
           <a href="/" className={styles.logo}><Shield />BreakShield CI</a>
           <div className={styles.navLinks}>
             <a href="#features">Features</a>
+            <a href="#autofix">Auto-fix</a>
             <a href="#how">How it works</a>
             <a href="#pricing">Pricing</a>
             <a href="/blog">Blog</a>
@@ -40,9 +41,8 @@ export default function Home() {
         </h1>
 
         <p className={styles.heroP}>
-          BreakShield CI reads every pull request, parses your TypeScript interfaces
-          and OpenAPI specs with a real compiler, and tells you exactly what will break
-          — before you click merge.
+          BreakShield CI finds every breaking change in your pull requests
+          and <strong style={{color:'var(--text)'}}>automatically fixes them with AI</strong> — before you click merge.
         </p>
 
         <div className={styles.heroCTAs}>
@@ -60,7 +60,7 @@ export default function Home() {
           {[
             { n: '< 5s',  l: 'Time to results' },
             { n: '95%',   l: 'AST confidence'  },
-            { n: '0',     l: 'Config files'     },
+            { n: '1-click', l: 'AI auto-fix'   },
             { n: 'Free',  l: 'During beta'      },
           ].map(s => (
             <div key={s.l} className={styles.heroStat}>
@@ -183,6 +183,7 @@ export default function Home() {
             {[
               { icon:'📋', title:'TypeScript + OpenAPI',  desc:'Interfaces, type aliases, exported functions, REST endpoints, request bodies, response schemas — all in one pass.' },
               { icon:'🎯', title:'Confidence scoring',    desc:'Each finding gets a score 0–100 based on usage type: direct access (90%), destructuring (80%), type annotation (80%).' },
+              { icon:'✨', title:'AI auto-fix',            desc:'One click generates a Gemini-powered fix and opens a PR. Review, merge, done. No manual hunting.' },
               { icon:'🛡️', title:'Merge protection',      desc:'HIGH and CRITICAL risk PRs get a failing Check Run. Merge is blocked until the team acknowledges the change.' },
               { icon:'⚡', title:'Under 5 seconds',       desc:'Analysis runs in the background via Next.js waitUntil. Your PR gets a comment before you finish your coffee.' },
               { icon:'📊', title:'5 risk levels',         desc:'SAFE · LOW · MEDIUM · HIGH · CRITICAL — calculated from change type, consumer count, and confidence.' },
@@ -238,6 +239,61 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── AUTO-FIX SECTION ── */}
+      <section className={styles.section} id="autofix" style={{background:'var(--bg2)'}}>
+        <div className={styles.inner}>
+          <Eyebrow>AI Auto-fix</Eyebrow>
+          <h2 className={styles.h2}>Found a breaking change? Fix it in one click.</h2>
+          <p className={styles.lead}>
+            BreakShield CI doesn&apos;t just tell you what broke — it fixes it.
+            Powered by Google Gemini, it rewrites the affected code and opens a ready-to-merge PR.
+          </p>
+
+          <div className={styles.autofixShowcase}>
+            <div className={styles.autofixSteps}>
+              {[
+                { icon: '🔬', title: 'Breaking change detected', desc: 'BreakShield CI finds UserResponse.email was removed. 2 consumer files will break.' },
+                { icon: '✨', title: 'One click to fix', desc: 'Click "Suggest fix with AI". Gemini analyzes the code and writes a targeted patch.' },
+                { icon: '📋', title: 'PR ready to merge', desc: 'A new pull request appears with the fix. You review, approve, and merge.' },
+                { icon: '✅', title: 'Production stays green', desc: 'No 3am incidents. No broken deploys. Just clean, working code.' },
+              ].map(s => (
+                <div key={s.title} className={styles.autofixStep}>
+                  <div className={styles.autofixStepIcon}>{s.icon}</div>
+                  <div>
+                    <div className={styles.autofixStepTitle}>{s.title}</div>
+                    <div className={styles.autofixStepDesc}>{s.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.autofixCard}>
+              <div className={styles.autofixCardTop}>
+                <code className={styles.autofixValue}>UserResponse.createdAt</code>
+                <span className={styles.autofixBadge}>removed field</span>
+              </div>
+              <p className={styles.autofixCardDesc}>Property &apos;createdAt&apos; removed from &apos;UserResponse&apos;</p>
+              <div className={styles.autofixCardFile}>📄 src/types/user.ts</div>
+              <div className={styles.autofixCardDiff}>
+                <div className={styles.autofixBefore}><span>Before</span><code>createdAt: string</code></div>
+              </div>
+              <div className={styles.autofixCardAction}>
+                <span className={styles.autofixBtn}>✨ Suggest fix with AI</span>
+              </div>
+              <div className={styles.autofixCardResult}>
+                <span className={styles.autofixSuccess}>✓ Fix PR #11 created — Review &amp; merge →</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.autofixNote}>
+            <span>🔑</span>
+            <p>Bring your own Google Gemini API key — free tier supports 1,500 fixes/day.
+            Or use BreakShield&apos;s shared key included in the Pro plan.</p>
+          </div>
+        </div>
+      </section>
+
       {/* ── PRICING ── */}
       <section className={styles.sectionAlt} id="pricing">
         <div className={styles.inner}>
@@ -259,6 +315,70 @@ export default function Home() {
               <p>&ldquo;We merged a PR that removed a field used in 6 places. Took 3 hours to debug in production. BreakShield CI would have caught it in seconds.&rdquo;</p>
               <footer>— Every backend developer, at least once</footer>
             </blockquote>
+          </div>
+        </div>
+      </section>
+
+      {/* ── AUTO-FIX SECTION ── */}
+      <section className={styles.section} id="autofix" style={{background:'var(--bg2)'}}>
+        <div className={styles.inner}>
+          <Eyebrow>AI Auto-fix</Eyebrow>
+          <h2 className={styles.h2}>Finds the bug. Writes the fix. Opens the PR.</h2>
+          <p className={styles.lead}>
+            When BreakShield CI detects a breaking change, one click generates an AI-powered fix
+            and opens a pull request — ready to review and merge.
+          </p>
+
+          <div className={styles.autofixShowcase}>
+            {/* Left — steps */}
+            <div className={styles.autofixSteps}>
+              {[
+                { icon:'🔍', title:'Detects the breaking change', desc:'AST analysis finds the exact field, type, or endpoint that was removed or changed.' },
+                { icon:'✨', title:'AI generates the fix', desc:'Google Gemini rewrites only the affected code — preserving all existing logic and formatting.' },
+                { icon:'📬', title:'Opens a pull request', desc:'A new PR appears in your repository with the fix ready. Review, approve, merge.' },
+                { icon:'✅', title:'Zero downtime', desc:'The fix is applied before the breaking PR merges. Your production never sees the bug.' },
+              ].map((s,i) => (
+                <div key={i} className={styles.autofixStep}>
+                  <div className={styles.autofixStepIcon}>{s.icon}</div>
+                  <div>
+                    <div className={styles.autofixStepTitle}>{s.title}</div>
+                    <div className={styles.autofixStepDesc}>{s.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Right — mock fix PR */}
+            <div className={styles.autofixMock}>
+              <div className={styles.autofixMockHeader}>
+                <span className={styles.autofixMockBadge}>Pull Request</span>
+                <span className={styles.autofixMockOpen}>⬤ Open</span>
+              </div>
+              <div className={styles.autofixMockTitle}>
+                fix: [BreakShield] auto-fix removed field in user.ts
+              </div>
+              <div className={styles.autofixMockMeta}>
+                breakshield-ci bot · just now · 1 file changed
+              </div>
+              <div className={styles.autofixMockDiff}>
+                <div className={styles.diffHeader}>src/types/user.ts</div>
+                <div className={styles.diffRemoved}>- {'  '}createdAt: string</div>
+                <div className={styles.diffAdded}>+ {'  '}// createdAt removed — use GET /users/:id/audit instead</div>
+                <div className={styles.diffAdded}>+ {'  '}updatedAt: string</div>
+              </div>
+              <div className={styles.autofixMockActions}>
+                <span className={styles.autofixMockMerge}>Merge pull request</span>
+                <span className={styles.autofixMockClose}>Close</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.autofixNote}>
+            <span>🔑</span>
+            <p>
+              Bring your own Google Gemini API key — free tier gives you 1,500 fixes/day.
+              Or use the shared key included with BreakShield CI.
+            </p>
           </div>
         </div>
       </section>

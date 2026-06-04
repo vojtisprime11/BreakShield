@@ -57,7 +57,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     userGeminiKey,
   } = body
 
-  if (!owner || !repo || !filePath || !headSha || !finding) {
+  if (!owner || !repo || !filePath || !finding) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
