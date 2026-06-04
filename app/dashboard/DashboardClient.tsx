@@ -130,10 +130,14 @@ export default function DashboardClient({ user }: { user: User }) {
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
         {/* Brand */}
         <div className={styles.brand}>
-          <Link href="/" className={styles.brandLogo}>
+          <button
+            className={styles.brandLogo}
+            onClick={() => { setSelectedRepo(null); setPrs([]); setSelectedPr(null); setFindings([]); setRisk(null); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+          >
             <ShieldIcon />
             <span>BreakShield CI</span>
-          </Link>
+          </button>
           <button className={styles.sidebarToggle} onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? '←' : '→'}
           </button>

@@ -100,10 +100,10 @@
 @keyframes shimmer { 0%,100%{opacity:0.5} 50%{opacity:0.8} }
 .noRepos { text-align: center; padding: 64px 24px; }
 .noReposIcon { font-size: 48px; margin-bottom: 16px; }
-.noRepos h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+.noRepos h2 { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
 .noRepos p { color: var(--muted2); margin-bottom: 24px; }
 .sectionHeader { margin-bottom: 24px; }
-.sectionHeader h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.sectionHeader h2 { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
 .sectionHeader p { font-size: 14px; color: var(--muted2); }
 
 /* ════ REPO GRID ════ */
@@ -118,7 +118,7 @@
 .repoCardTop { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .repoCardIcon { font-size: 20px; }
 .repoCardPrivate { font-size: 11px; color: var(--muted); background: var(--bg3); padding: 2px 8px; border-radius: 4px; }
-.repoCardName { font-size: 14px; font-weight: 700; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repoCardName { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repoCardBranch { font-size: 12px; color: var(--muted2); margin-bottom: 14px; }
 .repoCardFooter { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); }
 .repoCardArrow { color: var(--accent); }
@@ -139,7 +139,7 @@
 .prStateBadge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
 .prOpen { background: rgba(34,197,94,0.12); color: #22c55e; }
 .prClosed { background: rgba(139,92,246,0.12); color: #8b5cf6; }
-.prTitle { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prTitle { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prMeta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted2); flex-wrap: wrap; }
 .authorAvatar { width: 16px; height: 16px; border-radius: 50%; }
 .prMeta code { background: var(--bg3); padding: 1px 5px; border-radius: 3px; font-size: 11px; color: var(--muted2); }
@@ -172,7 +172,7 @@
 
 .notAnalyzed { text-align: center; padding: 48px 24px; }
 .notAnalyzedIcon { font-size: 40px; margin-bottom: 14px; }
-.notAnalyzed h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.notAnalyzed h3 { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
 .notAnalyzed p { color: var(--muted2); margin-bottom: 20px; font-size: 14px; }
 
 /* Risk summary */
