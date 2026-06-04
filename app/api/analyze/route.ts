@@ -162,18 +162,19 @@ async function runAnalysis(
   const filtered = filterByConfidence(findings)
   const risk     = calculateRisk(filtered)
 
-  return {
-    ok: true,
-    prTitle, prUrl, prState, prAuthor,
-    baseBranch, headBranch,
-    findings: filtered,
-    risk,
-    filesAnalyzed:  fileVersions.length,
-    totalFiles:     allFiles.length,
-    durationMs:     Date.now() - start,
-    withEvidence,
-    errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
-  }
+  return NextResponse.json({
+      ok: true,
+      prTitle, prUrl, prState, prAuthor,
+      baseBranch, headBranch,
+      headSha,
+      findings: filtered,
+      risk,
+      filesAnalyzed:  fileVersions.length,
+      totalFiles:     allFiles.length,
+      durationMs:     Date.now() - start,
+      withEvidence,
+      errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
+    })
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────

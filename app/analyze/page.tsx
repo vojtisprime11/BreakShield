@@ -53,7 +53,7 @@ interface Risk {
 interface AnalysisResult {
   ok: boolean; isDemo?: boolean; withEvidence?: boolean
   prTitle?: string; prUrl?: string; prState?: string; prAuthor?: string
-  baseBranch?: string; headBranch?: string
+  baseBranch?: string; headBranch?: string; headSha?: string
   findings?: Finding[]; risk?: Risk
   filesAnalyzed?: number; totalFiles?: number; durationMs?: number
   note?: string; error?: string; message?: string
@@ -296,7 +296,21 @@ export default function AnalyzePage() {
                 </div>
                 <div className={styles.findingList}>
                   {breaking.map((f, i) => (
-                    <FindingCard key={i} finding={f} withEvidence={!!result.withEvidence} />
+                    <FindingCard
+                      key={i}
+                      finding={f}
+                      withEvidence={!!result.withEvidence}
+                      prData={result.prUrl ? (() => {
+                        const m = result.prUrl!.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+                        if (!m) return null
+                        return {
+                          owner: m[1]!, repo: m[2]!,
+                          baseBranch: result.baseBranch ?? 'main',
+                          prNumber: parseInt(m[3]!, 10),
+                          headSha: result.headSha ?? '',
+                        }
+                      })() : null}
+                    />
                   ))}
                 </div>
               </section>
@@ -401,7 +415,45 @@ export default function AnalyzePage() {
 
 /* ─── Sub-components ─────────────────────────────────────────────────────── */
 
-function FindingCard({ finding: f, withEvidence }: { finding: Finding; withEvidence: boolean }) {
+function FindingCard({ finding: f, withEvidence, prData }: {
+  finding: Finding
+  withEvidence: boolean
+  prData?: { owner: string; repo: string; baseBranch: string; prNumber: number; headSha: string } | null
+}) {
+  const [fixing, setFixing]   = useState(false)
+  const [fixPr,  setFixPr]    = useState<{ url: string; number: number } | null>(null)
+  const [fixErr, setFixErr]   = useState('')
+
+  async function suggestFix() {
+    if (!prData) return
+    setFixing(true); setFixErr(''); setFixPr(null)
+    try {
+      const resp = await fetch('/api/autofix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner:       prData.owner,
+          repo:        prData.repo,
+          baseBranch:  prData.baseBranch,
+          prNumber:    prData.prNumber,
+          filePath:    f.sourceFile,
+          headSha:     prData.headSha,
+          finding: {
+            changeType:    f.changeType,
+            affectedValue: f.affectedValue,
+            description:   f.description,
+            beforeSchema:  f.beforeSchema,
+            afterSchema:   f.afterSchema,
+          },
+        }),
+      })
+      const data = await resp.json()
+      if (!resp.ok || data.error) setFixErr(data.error ?? 'Fix failed')
+      else setFixPr({ url: data.prUrl, number: data.prNumber })
+    } catch { setFixErr('Network error') }
+    finally { setFixing(false) }
+  }
+
   const isBreaking = BREAKING.has(f.changeType)
   const evidenceItems = f.evidence ?? []
   const highConf = evidenceItems.filter(e => e.confidence >= 80)
@@ -482,6 +534,24 @@ function FindingCard({ finding: f, withEvidence }: { finding: Finding; withEvide
                 </div>
               ))}
             </details>
+          )}
+        </div>
+      )}
+
+      {/* Auto-fix button */}
+      {isBreaking && prData && (
+        <div className={styles.autofixRow}>
+          {fixPr ? (
+            <a href={fixPr.url} target="_blank" rel="noopener" className={styles.autofixSuccess}>
+              ✓ Fix PR #{fixPr.number} created — Review &amp; merge →
+            </a>
+          ) : (
+            <>
+              <button className={styles.autofixBtn} onClick={suggestFix} disabled={fixing}>
+                {fixing ? <><Spin /> Generating fix…</> : <>✨ Suggest fix with AI</>}
+              </button>
+              {fixErr && <span className={styles.autofixErr}>{fixErr}</span>}
+            </>
           )}
         </div>
       )}

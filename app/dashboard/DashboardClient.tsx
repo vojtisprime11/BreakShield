@@ -38,6 +38,7 @@ interface PR {
   authorAvatar: string
   baseBranch: string
   headBranch: string
+  headSha?: string
   url: string
   createdAt: string
   analyzed: boolean
@@ -468,36 +469,15 @@ export default function DashboardClient({ user }: { user: User }) {
                         <span className={styles.breakingBadge}>⚠ {breakingFindings.length} Breaking Change{breakingFindings.length !== 1 ? 's' : ''}</span>
                       </div>
                       {breakingFindings.map((f, i) => (
-                        <div key={i} className={styles.findingCard}>
-                          <div className={styles.findingCardTop}>
-                            <code className={styles.findingAffected}>{f.affected_value}</code>
-                            <span className={styles.findingTypeBadge}>{f.change_type.replace(/_/g, ' ')}</span>
-                            <span
-                              className={styles.findingConfBadge}
-                              style={{ color: f.confidence >= 80 ? '#10b981' : '#f59e0b' }}
-                            >
-                              {f.confidence}% {f.confidence >= 80 ? '· AST-verified' : '· probable'}
-                            </span>
-                          </div>
-                          <p className={styles.findingDesc}>{f.description}</p>
-                          <div className={styles.findingFile}>📄 {f.source_file}</div>
-                          {(f.before_schema?.text || f.after_schema?.text) && (
-                            <div className={styles.findingDiff}>
-                              {f.before_schema?.text && (
-                                <div className={styles.diffBefore}>
-                                  <span>Before</span>
-                                  <code>{f.before_schema.text}</code>
-                                </div>
-                              )}
-                              {f.after_schema?.text && (
-                                <div className={styles.diffAfter}>
-                                  <span>After</span>
-                                  <code>{f.after_schema.text}</code>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <DashFindingCard
+                          key={i}
+                          finding={f}
+                          owner={selectedRepo.owner}
+                          repo={selectedRepo.name}
+                          baseBranch={selectedRepo.defaultBranch}
+                          prNumber={selectedPr.number}
+                          headSha={selectedPr.headSha ?? ''}
+                        />
                       ))}
                     </div>
                   )}
@@ -576,6 +556,76 @@ function AnalyzeNowButton({ owner, repo, prNumber, prUrl, onDone }: {
       <p style={{fontSize:'13px',color:'var(--muted2)',marginTop:'10px'}}>
         Or <a href={prUrl} target="_blank" rel="noopener" style={{color:'var(--accent)'}}>push a commit</a> to trigger automatic analysis.
       </p>
+    </div>
+  )
+}
+
+function DashFindingCard({ finding: f, owner, repo, baseBranch, prNumber, headSha }: {
+  finding: Finding
+  owner: string; repo: string; baseBranch: string; prNumber: number; headSha: string
+}) {
+  const [fixing, setFixing] = useState(false)
+  const [fixPr,  setFixPr]  = useState<{ url: string; number: number } | null>(null)
+  const [fixErr, setFixErr] = useState('')
+
+  async function suggestFix() {
+    setFixing(true); setFixErr(''); setFixPr(null)
+    try {
+      const resp = await fetch('/api/autofix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner, repo, baseBranch, prNumber,
+          filePath: f.source_file,
+          headSha,
+          finding: {
+            changeType:    f.change_type,
+            affectedValue: f.affected_value,
+            description:   f.description,
+            beforeSchema:  f.before_schema?.text,
+            afterSchema:   f.after_schema?.text,
+          },
+        }),
+      })
+      const data = await resp.json()
+      if (!resp.ok || data.error) setFixErr(data.error ?? 'Fix failed')
+      else setFixPr({ url: data.prUrl, number: data.prNumber })
+    } catch { setFixErr('Network error') }
+    finally { setFixing(false) }
+  }
+
+  return (
+    <div className={styles.findingCard}>
+      <div className={styles.findingCardTop}>
+        <code className={styles.findingAffected}>{f.affected_value}</code>
+        <span className={styles.findingTypeBadge}>{f.change_type.replace(/_/g, ' ')}</span>
+        <span className={styles.findingConfBadge} style={{ color: f.confidence >= 80 ? '#10b981' : '#f59e0b' }}>
+          {f.confidence}% {f.confidence >= 80 ? '· AST-verified' : '· probable'}
+        </span>
+      </div>
+      <p className={styles.findingDesc}>{f.description}</p>
+      <div className={styles.findingFile}>📄 {f.source_file}</div>
+      {(f.before_schema?.text || f.after_schema?.text) && (
+        <div className={styles.findingDiff}>
+          {f.before_schema?.text && <div className={styles.diffBefore}><span>Before</span><code>{f.before_schema.text}</code></div>}
+          {f.after_schema?.text  && <div className={styles.diffAfter}><span>After</span><code>{f.after_schema.text}</code></div>}
+        </div>
+      )}
+      {/* Auto-fix */}
+      <div className={styles.autofixRow}>
+        {fixPr ? (
+          <a href={fixPr.url} target="_blank" rel="noopener" className={styles.autofixSuccess}>
+            ✓ Fix PR #{fixPr.number} created — Review &amp; merge →
+          </a>
+        ) : (
+          <>
+            <button className={styles.autofixBtn} onClick={suggestFix} disabled={fixing}>
+              {fixing ? '⏳ Generating fix…' : '✨ Suggest fix with AI'}
+            </button>
+            {fixErr && <span className={styles.autofixErr}>{fixErr}</span>}
+          </>
+        )}
+      </div>
     </div>
   )
 }

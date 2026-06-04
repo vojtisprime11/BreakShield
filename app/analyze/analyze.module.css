@@ -336,3 +336,72 @@
   .inputRow { flex-direction:column; }
   .safeFinding { grid-template-columns:1fr; }
 }
+
+/* ════════════════════════════════
+   AUTO-FIX
+════════════════════════════════ */
+.autofixRow {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.autofixBtn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: linear-gradient(135deg, rgba(91,141,238,.15), rgba(139,92,246,.15));
+  border: 1px solid rgba(91,141,238,.35);
+  color: #93b4f5; cursor: pointer;
+  padding: 8px 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 700;
+  transition: background .15s, border-color .15s;
+}
+.autofixBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(91,141,238,.25), rgba(139,92,246,.25));
+  border-color: rgba(91,141,238,.6);
+}
+.autofixBtn:disabled { opacity: .6; cursor: not-allowed; }
+.autofixSuccess {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3);
+  color: #10b981; padding: 8px 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 700;
+  transition: background .15s;
+}
+.autofixSuccess:hover { background: rgba(16,185,129,.18); }
+.autofixErr { font-size: 12px; color: #f43f5e; }
+
+/* ════════════════════════════════
+   AUTOFIX
+════════════════════════════════ */
+.autofixRow {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.autofixBtn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: linear-gradient(135deg, rgba(91,141,238,.15), rgba(139,92,246,.15));
+  border: 1px solid rgba(91,141,238,.35);
+  color: #93b4f5;
+  padding: 8px 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+}
+.autofixBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(91,141,238,.25), rgba(139,92,246,.25));
+  border-color: rgba(91,141,238,.6);
+  color: #fff;
+}
+.autofixBtn:disabled { opacity: .6; cursor: not-allowed; }
+.autofixSuccess {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3);
+  color: #10b981; padding: 8px 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 700; transition: opacity .15s;
+}
+.autofixSuccess:hover { opacity: .85; }
+.autofixErr { font-size: 12px; color: #f43f5e; }
