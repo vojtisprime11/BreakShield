@@ -134,14 +134,18 @@ export default function DashboardClient({ user }: { user: User }) {
             <ShieldIcon />
             <span>BreakShield CI</span>
           </Link>
-          {selectedRepo && (
+          {selectedRepo ? (
             <button
               className={styles.sidebarToggle}
               onClick={() => { setSelectedRepo(null); setPrs([]); setSelectedPr(null); setFindings([]); setRisk(null); }}
               title="Back to repositories"
             >
-              ←
+              ← Repos
             </button>
+          ) : (
+            <Link href="/" className={styles.sidebarToggle} title="Go to homepage" style={{textDecoration:'none'}}>
+              🏠
+            </Link>
           )}
         </div>
 
