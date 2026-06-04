@@ -82,6 +82,7 @@ export default function DashboardClient({ user }: { user: User }) {
   const [loadingPrs, setLoadingPrs] = useState(false)
   const [loadingFindings, setLoadingFindings] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [view, setView] = useState<'repos' | 'settings'>('repos')
 
   // Load repos on mount
   useEffect(() => {
@@ -199,6 +200,13 @@ export default function DashboardClient({ user }: { user: User }) {
           <a href={INSTALL_URL} target="_blank" rel="noopener" className={styles.analyzeLink}>
             + Add repository
           </a>
+          <button
+            className={`${styles.analyzeLink} ${view === 'settings' ? styles.repoItemActive : ''}`}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            onClick={() => setView(v => v === 'settings' ? 'repos' : 'settings')}
+          >
+            ⚙ Settings
+          </button>
         </div>
       </aside>
 
@@ -235,8 +243,13 @@ export default function DashboardClient({ user }: { user: User }) {
         </header>
 
         <div className={styles.content}>
+          {/* ── Settings view ── */}
+          {view === 'settings' && (
+            <SettingsPanel onClose={() => setView('repos')} />
+          )}
+
           {/* ── No repo selected ── */}
-          {!selectedRepo && (
+          {view === 'repos' && !selectedRepo && (
             <div className={styles.emptyState}>
               {loadingRepos ? (
                 <div className={styles.loadingGrid}>
@@ -279,7 +292,7 @@ export default function DashboardClient({ user }: { user: User }) {
           )}
 
           {/* ── Repo selected, no PR ── */}
-          {selectedRepo && !selectedPr && (
+          {view === 'repos' && selectedRepo && !selectedPr && (
             <div>
               <div className={styles.sectionHeader}>
                 <h2>Pull Requests — {selectedRepo.fullName}</h2>
@@ -344,7 +357,7 @@ export default function DashboardClient({ user }: { user: User }) {
           )}
 
           {/* ── PR selected — findings ── */}
-          {selectedRepo && selectedPr && (
+          {view === 'repos' && selectedRepo && selectedPr && (
             <div>
               {/* PR header */}
               <div className={styles.prDetailHeader}>
@@ -625,6 +638,107 @@ function DashFindingCard({ finding: f, owner, repo, baseBranch, prNumber, headSh
             {fixErr && <span className={styles.autofixErr}>{fixErr}</span>}
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+function SettingsPanel({ onClose }: { onClose: () => void }) {
+  const [geminiKey, setGeminiKey] = useState('')
+  const [saved, setSaved]         = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [hasKey, setHasKey]       = useState(false)
+
+  useEffect(() => {
+    fetch('/api/settings').then(r => r.json()).then(d => setHasKey(!!d.hasGeminiKey)).catch(() => {})
+  }, [])
+
+  async function save() {
+    setSaving(true); setSaved(false)
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ geminiApiKey: geminiKey }),
+      })
+      setSaved(true); setHasKey(!!geminiKey)
+      setGeminiKey('')
+      setTimeout(() => setSaved(false), 3000)
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div>
+      <div className={styles.sectionHeader}>
+        <h2>Settings</h2>
+        <p>Configure your BreakShield CI preferences.</p>
+      </div>
+
+      {/* Gemini BYOK */}
+      <div className={styles.settingsCard}>
+        <div className={styles.settingsCardHeader}>
+          <div>
+            <h3 className={styles.settingsCardTitle}>Google Gemini API Key</h3>
+            <p className={styles.settingsCardDesc}>
+              Add your own Gemini API key to use the AI auto-fix feature.
+              Your key is encrypted and never shared.{' '}
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" className={styles.settingsLink}>
+                Get a free key →
+              </a>
+            </p>
+          </div>
+          {hasKey && (
+            <span className={styles.settingsActiveBadge}>✓ Key saved</span>
+          )}
+        </div>
+        <div className={styles.settingsInputRow}>
+          <input
+            className={styles.settingsInput}
+            type="password"
+            placeholder={hasKey ? '••••••••••••••••••••• (key saved)' : 'AIza...'}
+            value={geminiKey}
+            onChange={e => setGeminiKey(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && geminiKey && save()}
+          />
+          <button className={styles.settingsSaveBtn} onClick={save} disabled={saving || !geminiKey}>
+            {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save'}
+          </button>
+          {hasKey && (
+            <button
+              className={styles.settingsRemoveBtn}
+              onClick={() => { setGeminiKey('__remove__'); save() }}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        <p className={styles.settingsNote}>
+          Free tier: 1,500 requests/day · Gemini 2.0 Flash ·{' '}
+          <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener" className={styles.settingsLink}>
+            See pricing
+          </a>
+        </p>
+      </div>
+
+      {/* How auto-fix works */}
+      <div className={styles.settingsCard} style={{ marginTop: 16 }}>
+        <h3 className={styles.settingsCardTitle}>How AI Auto-fix Works</h3>
+        <div className={styles.settingsSteps}>
+          {[
+            { n: '1', t: 'BreakShield detects a breaking change', d: 'AST analysis finds removed fields, changed types, or deleted endpoints.' },
+            { n: '2', t: 'Click "Suggest fix with AI"', d: 'The affected file is sent to Gemini with context about what changed.' },
+            { n: '3', t: 'Gemini generates a fix', d: 'The model rewrites only the affected code while preserving all existing logic.' },
+            { n: '4', t: 'Review & merge', d: 'A new PR is created with the fix. You review and merge — no blind auto-merging.' },
+          ].map(s => (
+            <div key={s.n} className={styles.settingsStep}>
+              <div className={styles.settingsStepNum}>{s.n}</div>
+              <div>
+                <strong>{s.t}</strong>
+                <p>{s.d}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
