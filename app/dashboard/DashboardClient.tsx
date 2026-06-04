@@ -384,8 +384,25 @@ export default function DashboardClient({ user }: { user: User }) {
                     prUrl={selectedPr.url}
                     onDone={(r) => {
                       setSelectedPr({ ...selectedPr, analyzed: true, riskLevel: r.risk?.riskLevel ?? null, riskScore: r.risk?.riskScore ?? null, breakingCount: r.risk?.breakingCount ?? null, consumersAffected: r.risk?.totalConsumersAffected ?? null, analysisStatus: 'completed', durationMs: r.durationMs ?? null, filesAnalyzed: r.filesAnalyzed ?? null })
-                      setFindings(r.findings ?? [])
-                      setRisk(r.risk ?? null)
+                      setFindings(r.findings?.map((f: any) => ({
+                        change_type: f.changeType,
+                        severity: f.severity,
+                        source_file: f.sourceFile,
+                        affected_value: f.affectedValue,
+                        description: f.description,
+                        before_schema: f.beforeSchema ? { text: f.beforeSchema } : null,
+                        after_schema: f.afterSchema ? { text: f.afterSchema } : null,
+                        confidence: f.confidence,
+                        is_breaking: ['removed_field','changed_type','removed_endpoint','added_required_field','changed_required','removed_parameter','removed_interface','changed_return_type'].includes(f.changeType),
+                      })) ?? [])
+                      setRisk(r.risk ? {
+                        risk_level: r.risk.riskLevel,
+                        risk_score: r.risk.riskScore,
+                        breaking_count: r.risk.breakingCount,
+                        total_consumers_affected: r.risk.totalConsumersAffected,
+                        max_confidence: r.risk.maxConfidence,
+                        summary: r.risk.summary,
+                      } : null)
                     }}
                   />
                 </div>
