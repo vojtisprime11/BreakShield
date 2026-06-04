@@ -144,7 +144,7 @@ export default function DashboardClient({ user }: { user: User }) {
             </button>
           ) : (
             <Link href="/" className={styles.sidebarToggle} title="Go to homepage" style={{textDecoration:'none'}}>
-              🏠
+              ← Home
             </Link>
           )}
         </div>
