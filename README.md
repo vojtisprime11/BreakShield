@@ -1,101 +1,145 @@
-# BreakShield CI — Automated Breaking Change Detection for GitHub
+<div align="center">
 
-> Catch breaking API changes in pull requests before they reach production.
+# 🛡️ BreakShield CI
 
-[![Install on GitHub](https://img.shields.io/badge/Install-GitHub%20App-blue?logo=github)](https://github.com/apps/breakshield-ci)
-[![Free during beta](https://img.shields.io/badge/Beta-Free-green)](https://breakshield-ci.vercel.app)
+**Catch breaking API changes before they ship. AI auto-fix included.**
 
----
-
-## What it does
-
-BreakShield CI is a GitHub App that automatically analyzes every pull request for breaking API changes in TypeScript interfaces and OpenAPI specs.
-
-When it detects a breaking change, it posts a detailed report directly in your PR — with exact file and line numbers of affected consumers — and creates a Check Run that blocks merge on HIGH or CRITICAL risk.
-
-**Zero config. Install once, works on every PR.**
+[![Install on GitHub](https://img.shields.io/badge/Install-GitHub%20App-2ea44f?style=for-the-badge&logo=github)](https://github.com/apps/breakshield-ci)
+[![Website](https://img.shields.io/badge/Website-breakshield--ci.vercel.app-5b8dee?style=for-the-badge)](https://breakshield-ci.vercel.app)
+[![TypeScript](https://img.shields.io/badge/TypeScript-AST%20Analysis-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://breakshield-ci.vercel.app)
 
 ---
 
-## How to prevent breaking API changes in TypeScript
+A GitHub App that **automatically detects breaking API changes** in pull requests using **AST analysis** — not LLM guessing.
 
-BreakShield CI uses [ts-morph](https://ts-morph.com) to parse a full TypeScript AST — not regex. This means it actually understands your code structure and finds:
+Finds removed fields, changed types, deleted endpoints, and new required parameters. Shows confidence levels, affected consumers, and risk scores. Then offers **AI-powered auto-fix** with one command.
 
-- Removed fields from interfaces and type aliases
-- Changed field types (`string` → `number`)
-- Optional → required changes
-- Removed exported functions and parameters
-- Removed REST endpoints (OpenAPI)
-- Added required fields to request bodies
+</div>
 
 ---
 
-## Automated breaking change detection for GitHub Actions
+## ⚡ Quick Start
 
-Unlike other CI tools, BreakShield CI doesn't just flag the changed file — it searches your entire codebase for consumer files and AST-verifies each match.
+1. **Install** → [github.com/apps/breakshield-ci](https://github.com/apps/breakshield-ci)
+2. **Open a PR** with API changes
+3. **BreakShield analyzes** automatically — posts findings in PR comment
+4. **Type `/fix`** in a comment to generate a fix PR with AI
+
+That's it. No config files. No YAML. No CI pipeline changes.
+
+---
+
+## 🔍 What It Detects
+
+| Change Type | Example | Severity |
+|:--|:--|:--|
+| Removed field | `UserResponse.email` deleted | 🔴 Critical |
+| Changed type | `id: number` → `id: string` | 🔴 Critical |
+| Removed endpoint | `GET /api/users/:id` gone | 🔴 Critical |
+| Added required field | New `orgId` required in request | 🟠 High |
+| Changed return type | `Promise<User>` → `Promise<void>` | 🟠 High |
+| Removed interface | `PaymentMethod` type deleted | 🔴 Critical |
+| Removed parameter | Function param removed | 🟡 Medium |
 
 Every finding includes:
-- Exact file path and line number
-- The specific line of code that uses the changed API
-- A confidence score (0–100) — low confidence noise is filtered automatically
+- **Confidence score** — 80%+ means AST-verified, no false positive
+- **Consumer search** — which files in your repo actually use that API
+- **Risk level** — CRITICAL / HIGH / MEDIUM / LOW / SAFE
+- **Before/after** — what changed exactly
 
 ---
 
-## Risk levels
+## 🤖 AI Auto-Fix
 
-| Level | Description | Merge |
-|-------|-------------|-------|
-| ✅ SAFE | No breaking changes | Allowed |
-| 🟢 LOW | Minor concerns | Allowed |
-| 🟡 MEDIUM | Possible breaking changes | Allowed with warning |
-| 🟠 HIGH | Breaking changes detected | **Blocked** |
-| 🔴 CRITICAL | Verified consumers will break | **Blocked** |
+Type `/fix` as a comment in your PR and BreakShield:
 
----
+1. 👀 Acknowledges (reaction on your comment)
+2. 🧠 Reads the affected file + breaking change context
+3. ✨ Sends to your AI provider to generate a fix
+4. 🚀 Opens a new PR with the corrected code
 
-## Installation
+### Supported AI Providers
 
-**[Install BreakShield CI on GitHub →](https://github.com/apps/breakshield-ci)**
+| Provider | Models | Free? |
+|:--|:--|:--|
+| Google Gemini | 3.5 Flash, 2.5 Pro, 2.5 Flash | ✅ Free tier |
+| OpenAI | GPT-5.5, GPT-5.4, GPT-5.4 mini | ❌ |
+| Anthropic | Claude Opus 4.8, Sonnet 4.6, Haiku 4.5 | ❌ |
+| Groq | GPT-OSS 120B, Llama 3.3 70B, Qwen3 32B | ✅ Free tier |
+| Perplexity | Sonar Deep Research, Sonar Pro | ❌ |
 
-Free during beta. No credit card required.
-
----
-
-## How it works
-
-1. You open a pull request
-2. BreakShield CI fetches changed TypeScript and OpenAPI files
-3. Parses before/after versions with full AST
-4. Diffs exported interfaces, type aliases, functions, and REST endpoints
-5. Searches codebase for consumer files via GitHub Code Search
-6. AST-verifies each match — direct access, destructuring, type annotations
-7. Posts PR comment + Check Run with results in seconds
+BYOK — Bring Your Own Key. Configure in the [Dashboard](https://breakshield-ci.vercel.app/dashboard).
 
 ---
 
-## Supported file types
+## 🏗️ How It Works
 
-- TypeScript (`.ts`, `.tsx`) — interfaces, type aliases, exported functions
-- OpenAPI / Swagger (`.yaml`, `.yml`, `.json`) — endpoints, request bodies, response schemas
+```
+PR opened / updated
+       ↓
+GitHub webhook fires → BreakShield CI
+       ↓
+Fetch changed files (base vs head)
+       ↓
+Parse both versions with ts-morph (TypeScript AST)
+       ↓
+Diff exported interfaces, types, functions, endpoints
+       ↓
+For each breaking change → search repo for consumers
+       ↓
+Calculate risk score → post PR comment + GitHub Check
+```
+
+**No LLM in detection.** Pure AST. Deterministic. Same code = same result every time.
+
+AI is only used when you explicitly request a fix via `/fix`.
 
 ---
 
-## Tech stack
+## 📊 Dashboard
 
-- **Next.js 16** — webhook handler
-- **ts-morph** — TypeScript AST analysis
-- **@apidevtools/swagger-parser** — OpenAPI parsing and dereferencing
-- **Supabase** — job queue and results persistence
-- **Vercel** — deployment
+The web dashboard at [breakshield-ci.vercel.app](https://breakshield-ci.vercel.app) provides:
 
----
-
-## Links
-
-- 🌐 [Website](https://breakshield-ci.vercel.app)
-- 📦 [GitHub Marketplace](https://github.com/marketplace/breakshield-ci)
-- 📝 [How I built it](https://dev.to/vojtaholes/the-3am-production-incident-that-made-me-build-breakshield-ci)
+- Overview of all your repositories and PRs
+- Detailed findings with before/after diffs
+- Risk scoring and trend analysis
+- One-click "Suggest fix with AI" button
+- Settings for AI provider and model selection
 
 ---
 
-*Built by [Vojta Holeš](https://github.com/vojtisprime11)*
+## 🛠️ Tech Stack
+
+- **Framework:** Next.js 15 (App Router)
+- **Language:** TypeScript
+- **AST Parsing:** ts-morph
+- **Database:** Supabase (PostgreSQL)
+- **Auth:** GitHub OAuth + JWT sessions
+- **Hosting:** Vercel (serverless)
+- **Queue:** Supabase-backed job queue with `after()` processing
+
+---
+
+## 🔒 Security
+
+- API keys stored encrypted at rest in Supabase
+- Keys never exposed to client (only `hasApiKey: boolean`)
+- OAuth tokens in signed HTTP-only JWT cookies
+- Webhook signatures verified with HMAC-SHA256
+- Write operations use installation tokens or scoped PATs
+
+---
+
+## 📝 License
+
+MIT — free for personal and commercial use.
+
+---
+
+<div align="center">
+
+**[Install on GitHub](https://github.com/apps/breakshield-ci)** · **[Dashboard](https://breakshield-ci.vercel.app)** · **[Report Bug](https://github.com/vojtisprime11/BreakShield/issues)**
+
+Made with 🛡️ by [@vojtisprime11](https://github.com/vojtisprime11)
+
+</div>
