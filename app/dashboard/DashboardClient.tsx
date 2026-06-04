@@ -130,17 +130,19 @@ export default function DashboardClient({ user }: { user: User }) {
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
         {/* Brand */}
         <div className={styles.brand}>
-          <button
-            className={styles.brandLogo}
-            onClick={() => { setSelectedRepo(null); setPrs([]); setSelectedPr(null); setFindings([]); setRisk(null); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-          >
+          <Link href="/" className={styles.brandLogo}>
             <ShieldIcon />
             <span>BreakShield CI</span>
-          </button>
-          <button className={styles.sidebarToggle} onClick={() => setSidebarOpen(!sidebarOpen)}>
-            {sidebarOpen ? '←' : '→'}
-          </button>
+          </Link>
+          {selectedRepo && (
+            <button
+              className={styles.sidebarToggle}
+              onClick={() => { setSelectedRepo(null); setPrs([]); setSelectedPr(null); setFindings([]); setRisk(null); }}
+              title="Back to repositories"
+            >
+              ←
+            </button>
+          )}
         </div>
 
         {/* User */}
@@ -201,23 +203,23 @@ export default function DashboardClient({ user }: { user: User }) {
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
             {selectedRepo ? (
-              <>
-                <span className={styles.breadcrumb}>
-                  <button onClick={() => { setSelectedRepo(null); setPrs([]); setSelectedPr(null) }} className={styles.breadcrumbBtn}>
-                    Dashboard
-                  </button>
-                  <span>/</span>
-                  <span>{selectedRepo.owner}</span>
-                  <span>/</span>
+              <span className={styles.breadcrumb}>
+                <button onClick={() => { setSelectedRepo(null); setPrs([]); setSelectedPr(null); setFindings([]); setRisk(null); }} className={styles.breadcrumbBtn}>
+                  Dashboard
+                </button>
+                <span>/</span>
+                {selectedPr ? (
+                  <>
+                    <button onClick={() => { setSelectedPr(null); setFindings([]); setRisk(null); }} className={styles.breadcrumbBtn}>
+                      {selectedRepo.name}
+                    </button>
+                    <span>/</span>
+                    <strong>PR #{selectedPr.number}</strong>
+                  </>
+                ) : (
                   <strong>{selectedRepo.name}</strong>
-                  {selectedPr && (
-                    <>
-                      <span>/</span>
-                      <span>PR #{selectedPr.number}</span>
-                    </>
-                  )}
-                </span>
-              </>
+                )}
+              </span>
             ) : (
               <span className={styles.pageTitle}>Dashboard</span>
             )}
