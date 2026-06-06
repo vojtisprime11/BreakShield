@@ -349,5 +349,20 @@ BEGIN
   RETURN deleted;
 END; $$;
 
--- ── Example: run nightly via pg_cron ──
--- SELECT cron.schedule('cleanup-jobs', '0 3 * * *', $$ SELECT cleanup_old_jobs(7) $$);
+-- ─── USER SETTINGS ──────────────────────────────────────────────────────────
+-- Stores per-user settings like AI provider keys (BYOK)
+CREATE TABLE IF NOT EXISTS user_settings (
+  id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  github_login text UNIQUE NOT NULL,
+  ai_provider  text,           -- 'gemini' | 'openai' | 'anthropic' | 'groq' | 'perplexity'
+  ai_api_key   text,           -- encrypted at rest via Supabase
+  created_at   timestamptz DEFAULT now(),
+  updated_at   timestamptz DEFAULT now()
+);
+
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_user_settings" ON user_settings USING (false);
+
+DROP TRIGGER IF EXISTS trg_user_settings_updated ON user_settings;
+CREATE TRIGGER trg_user_settings_updated
+  BEFORE UPDATE ON user_settings FOR EACH ROW EXECUTE FUNCTION _set_updated_at();

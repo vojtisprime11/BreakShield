@@ -490,6 +490,7 @@ export default function DashboardClient({ user }: { user: User }) {
                           baseBranch={selectedRepo.defaultBranch}
                           prNumber={selectedPr.number}
                           headSha={selectedPr.headSha ?? ''}
+                          installationId={selectedRepo.installationId}
                         />
                       ))}
                     </div>
@@ -573,9 +574,9 @@ function AnalyzeNowButton({ owner, repo, prNumber, prUrl, onDone }: {
   )
 }
 
-function DashFindingCard({ finding: f, owner, repo, baseBranch, prNumber, headSha }: {
+function DashFindingCard({ finding: f, owner, repo, baseBranch, prNumber, headSha, installationId }: {
   finding: Finding
-  owner: string; repo: string; baseBranch: string; prNumber: number; headSha: string
+  owner: string; repo: string; baseBranch: string; prNumber: number; headSha: string; installationId?: number
 }) {
   const [fixing, setFixing] = useState(false)
   const [fixPr,  setFixPr]  = useState<{ url: string; number: number } | null>(null)
@@ -591,6 +592,7 @@ function DashFindingCard({ finding: f, owner, repo, baseBranch, prNumber, headSh
           owner, repo, baseBranch, prNumber,
           filePath: f.source_file,
           headSha,
+          installationId,
           finding: {
             changeType:    f.change_type,
             affectedValue: f.affected_value,
@@ -644,80 +646,337 @@ function DashFindingCard({ finding: f, owner, repo, baseBranch, prNumber, headSh
 }
 
 function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const [geminiKey, setGeminiKey] = useState('')
-  const [saved, setSaved]         = useState(false)
-  const [saving, setSaving]       = useState(false)
-  const [hasKey, setHasKey]       = useState(false)
+  const [provider,    setProvider]    = useState('gemini')
+  const [model,       setModel]       = useState('')
+  const [apiKey,      setApiKey]      = useState('')
+  const [saving,      setSaving]      = useState(false)
+  const [hasKey,      setHasKey]      = useState(false)
+  const [curProvider, setCurProvider] = useState<string | null>(null)
+  const [curModel,    setCurModel]    = useState<string | null>(null)
+  // validation result: null = idle, 'testing' = in progress, 'ok' = valid, 'warn' = rate-limited but valid, 'error' = invalid
+  const [testState,   setTestState]   = useState<null | 'testing' | 'ok' | 'warn' | 'error'>(null)
+  const [testMsg,     setTestMsg]     = useState('')
+
+  const PROVIDERS = [
+    {
+      id: 'gemini',
+      name: 'Google Gemini',
+      free: true,
+      url: 'https://aistudio.google.com/apikey',
+      keyPrefix: 'AIza…',
+      keyDesc: 'Google AI Studio API key — works with all Gemini models. Free tier gives 1,500 req/day.',
+    },
+    {
+      id: 'openai',
+      name: 'OpenAI',
+      free: false,
+      url: 'https://platform.openai.com/api-keys',
+      keyPrefix: 'sk-…',
+      keyDesc: 'OpenAI platform API key — works with GPT-5.x, GPT-4o, o3, o4-mini and all other OpenAI models.',
+    },
+    {
+      id: 'anthropic',
+      name: 'Anthropic Claude',
+      free: false,
+      url: 'https://console.anthropic.com/settings/keys',
+      keyPrefix: 'sk-ant-…',
+      keyDesc: 'Anthropic API key — works with all Claude models (Opus, Sonnet, Haiku).',
+    },
+    {
+      id: 'groq',
+      name: 'Groq',
+      free: true,
+      url: 'https://console.groq.com/keys',
+      keyPrefix: 'gsk_…',
+      keyDesc: 'GroqCloud API key — works with all Groq-hosted models (Llama, Qwen, GPT-OSS). Free tier available.',
+    },
+    {
+      id: 'perplexity',
+      name: 'Perplexity',
+      free: false,
+      url: 'https://www.perplexity.ai/settings/api',
+      keyPrefix: 'pplx-…',
+      keyDesc: 'Perplexity API key — works with Sonar, Sonar Pro, Sonar Reasoning Pro and Sonar Deep Research.',
+    },
+  ] as const
+
+  type ProviderId = typeof PROVIDERS[number]['id']
+
+  const MODELS: Record<ProviderId, { id: string; name: string; free?: boolean }[]> = {
+    // Source: https://ai.google.dev/gemini-api/docs/models (June 2026)
+    gemini: [
+      { id: 'gemini-3.5-flash',       name: 'Gemini 3.5 Flash',         free: true },
+      { id: 'gemini-3.1-flash-lite',  name: 'Gemini 3.1 Flash-Lite',    free: true },
+      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (preview)',  free: true },
+      { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (preview)' },
+      { id: 'gemini-2.5-pro',         name: 'Gemini 2.5 Pro' },
+      { id: 'gemini-2.5-flash',       name: 'Gemini 2.5 Flash',         free: true },
+      { id: 'gemini-2.5-flash-lite',  name: 'Gemini 2.5 Flash-Lite',    free: true },
+    ],
+    // Source: https://platform.openai.com/docs/models (June 2026)
+    openai: [
+      { id: 'gpt-5.5',       name: 'GPT-5.5' },
+      { id: 'gpt-5.4',       name: 'GPT-5.4' },
+      { id: 'gpt-5.4-mini',  name: 'GPT-5.4 mini' },
+      { id: 'gpt-5.4-nano',  name: 'GPT-5.4 nano' },
+      { id: 'gpt-4o',        name: 'GPT-4o (legacy)' },
+      { id: 'gpt-4.1',       name: 'GPT-4.1 (legacy)' },
+      { id: 'gpt-4.1-mini',  name: 'GPT-4.1 mini (legacy)' },
+      { id: 'o4-mini',       name: 'o4-mini (legacy)' },
+      { id: 'o3',            name: 'o3 (legacy)' },
+    ],
+    // Source: https://docs.anthropic.com/en/docs/about-claude/models/all-models (June 2026)
+    anthropic: [
+      { id: 'claude-opus-4-8',           name: 'Claude Opus 4.8' },
+      { id: 'claude-sonnet-4-6',         name: 'Claude Sonnet 4.6' },
+      { id: 'claude-haiku-4-5',          name: 'Claude Haiku 4.5' },
+      { id: 'claude-opus-4-5',           name: 'Claude Opus 4.5' },
+      { id: 'claude-sonnet-4-5',         name: 'Claude Sonnet 4.5' },
+      { id: 'claude-3-7-sonnet-20250219',name: 'Claude 3.7 Sonnet' },
+      { id: 'claude-3-5-sonnet-20241022',name: 'Claude 3.5 Sonnet' },
+      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
+    ],
+    // Source: https://console.groq.com/docs/models (June 2026)
+    groq: [
+      { id: 'openai/gpt-oss-120b',                       name: 'OpenAI GPT-OSS 120B',  free: true },
+      { id: 'openai/gpt-oss-20b',                        name: 'OpenAI GPT-OSS 20B',   free: true },
+      { id: 'llama-3.3-70b-versatile',                   name: 'Llama 3.3 70B',         free: true },
+      { id: 'llama-3.1-8b-instant',                      name: 'Llama 3.1 8B Instant',  free: true },
+      { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout 17B',    free: true },
+      { id: 'qwen/qwen3-32b',                            name: 'Qwen3 32B',             free: true },
+    ],
+    // Source: https://docs.perplexity.ai/docs/sonar/models (June 2026)
+    perplexity: [
+      { id: 'sonar-deep-research', name: 'Sonar Deep Research' },
+      { id: 'sonar-pro',           name: 'Sonar Pro' },
+      { id: 'sonar-reasoning-pro', name: 'Sonar Reasoning Pro' },
+      { id: 'sonar',               name: 'Sonar' },
+    ],
+  }
+
+  const DEFAULT_MODELS: Record<ProviderId, string> = {
+    gemini:     'gemini-2.5-flash',
+    openai:     'gpt-5.4-mini',
+    anthropic:  'claude-haiku-4-5',
+    groq:       'llama-3.3-70b-versatile',
+    perplexity: 'sonar',
+  }
+
+  // When provider changes, reset model to default for that provider
+  const handleProviderChange = (p: string) => {
+    setProvider(p)
+    setModel(DEFAULT_MODELS[p as ProviderId] ?? '')
+  }
 
   useEffect(() => {
-    fetch('/api/settings').then(r => r.json()).then(d => setHasKey(!!d.hasGeminiKey)).catch(() => {})
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(d => {
+        const p = d.aiProvider ?? 'gemini'
+        setProvider(p)
+        setCurProvider(d.aiProvider ?? null)
+        setHasKey(!!d.hasApiKey)
+        const m = d.aiModel ?? DEFAULT_MODELS[p as ProviderId] ?? ''
+        setModel(m)
+        setCurModel(d.aiModel ?? null)
+      })
+      .catch(() => {})
   }, [])
 
   async function save() {
-    setSaving(true); setSaved(false)
+    if (!apiKey && curProvider === provider && curModel === model) return
+    setSaving(true)
+    setTestState('testing')
+    setTestMsg('')
+
+    // If a new key was provided, test it first
+    if (apiKey) {
+      try {
+        const testResp = await fetch('/api/settings/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, apiKey }),
+        })
+        const testData = await testResp.json() as any
+        if (!testData.ok && !testData.warning) {
+          setTestState('error')
+          setTestMsg(testData.error ?? 'Invalid API key')
+          setSaving(false)
+          setTimeout(() => setTestState(null), 5000)
+          return
+        }
+        if (testData.warning) {
+          setTestState('warn')
+          setTestMsg('Key accepted · ' + (testData.error ?? 'quota/billing issue on your account'))
+        }
+      } catch {
+        setTestState('error')
+        setTestMsg('Could not reach validation endpoint')
+        setSaving(false)
+        setTimeout(() => setTestState(null), 5000)
+        return
+      }
+    }
+
+    // Save to DB
+    try {
+      const resp = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aiProvider: provider,
+          aiApiKey:   apiKey || undefined,
+          aiModel:    model,
+        }),
+      })
+      if (resp.ok) {
+        if (apiKey) { setHasKey(true); setTestState('ok'); setTestMsg('API key verified and saved') }
+        else { setTestState('ok'); setTestMsg('Settings saved') }
+        setCurProvider(provider)
+        setCurModel(model)
+        setApiKey('')
+        setTimeout(() => setTestState(null), 4000)
+      } else {
+        const d = await resp.json().catch(() => ({})) as any
+        setTestState('error')
+        setTestMsg(d.error ?? 'Failed to save')
+        setTimeout(() => setTestState(null), 5000)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function remove() {
+    setSaving(true)
     try {
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ geminiApiKey: geminiKey }),
+        body: JSON.stringify({ aiProvider: provider, aiApiKey: null }),
       })
-      setSaved(true); setHasKey(!!geminiKey)
-      setGeminiKey('')
-      setTimeout(() => setSaved(false), 3000)
+      setHasKey(false); setCurProvider(null); setCurModel(null)
     } finally { setSaving(false) }
   }
 
+  const currentProviderInfo = PROVIDERS.find(p => p.id === provider)
+  const currentModels       = MODELS[provider as ProviderId] ?? []
+  const activeModelName     = currentModels.find(m => m.id === curModel)?.name
+
   return (
     <div>
-      <div className={styles.sectionHeader}>
-        <h2>Settings</h2>
-        <p>Configure your BreakShield CI preferences.</p>
+      {/* Back button */}
+      <div style={{ marginBottom: 24 }}>
+        <button onClick={onClose} className={styles.backBtn}>
+          ← Back to Dashboard
+        </button>
       </div>
 
-      {/* Gemini BYOK */}
+      <div className={styles.sectionHeader}>
+        <h2>Settings</h2>
+        <p>Configure your AI provider for auto-fix.</p>
+      </div>
+
+      {/* AI Provider + Model selection */}
       <div className={styles.settingsCard}>
         <div className={styles.settingsCardHeader}>
           <div>
-            <h3 className={styles.settingsCardTitle}>Google Gemini API Key</h3>
+            <h3 className={styles.settingsCardTitle}>AI Provider</h3>
             <p className={styles.settingsCardDesc}>
-              Add your own Gemini API key to use the AI auto-fix feature.
-              Your key is encrypted and never shared.{' '}
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" className={styles.settingsLink}>
-                Get a free key →
-              </a>
+              Choose which AI model generates your code fixes.
+              {hasKey && curProvider && (
+                <span className={styles.settingsActiveBadge} style={{ marginLeft: 10 }}>
+                  ✓ {PROVIDERS.find(p => p.id === curProvider)?.name}
+                  {activeModelName ? ` · ${activeModelName}` : ''} active
+                </span>
+              )}
             </p>
           </div>
-          {hasKey && (
-            <span className={styles.settingsActiveBadge}>✓ Key saved</span>
-          )}
         </div>
-        <div className={styles.settingsInputRow}>
-          <input
-            className={styles.settingsInput}
-            type="password"
-            placeholder={hasKey ? '••••••••••••••••••••• (key saved)' : 'AIza...'}
-            value={geminiKey}
-            onChange={e => setGeminiKey(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && geminiKey && save()}
-          />
-          <button className={styles.settingsSaveBtn} onClick={save} disabled={saving || !geminiKey}>
-            {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save'}
-          </button>
-          {hasKey && (
+
+        {/* Provider tabs */}
+        <div className={styles.providerGrid}>
+          {PROVIDERS.map(p => (
             <button
-              className={styles.settingsRemoveBtn}
-              onClick={() => { setGeminiKey('__remove__'); save() }}
+              key={p.id}
+              className={`${styles.providerBtn} ${provider === p.id ? styles.providerBtnActive : ''}`}
+              onClick={() => handleProviderChange(p.id)}
             >
-              Remove
+              <span className={styles.providerName}>{p.name}</span>
+              {p.free && <span className={styles.providerFree}>Free tier</span>}
             </button>
-          )}
+          ))}
         </div>
-        <p className={styles.settingsNote}>
-          Free tier: 1,500 requests/day · Gemini 2.0 Flash ·{' '}
-          <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener" className={styles.settingsLink}>
-            See pricing
-          </a>
-        </p>
+
+        {/* Model select */}
+        <div style={{ marginTop: 16 }}>
+          <div className={styles.settingsLabel} style={{ marginBottom: 8 }}>Model</div>
+          <select
+            className={styles.settingsSelect}
+            value={model}
+            onChange={e => setModel(e.target.value)}
+          >
+            {currentModels.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.name}{m.free ? ' (free)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* API Key input */}
+        <div style={{ marginTop: 16 }}>
+          <div className={styles.settingsLabel}>
+            {currentProviderInfo?.name} API Key
+            {' · '}
+            <a href={currentProviderInfo?.url} target="_blank" rel="noopener" className={styles.settingsLink}>
+              Get key →
+            </a>
+          </div>
+          <div className={styles.settingsInputRow} style={{ marginTop: 8 }}>
+            <input
+              className={styles.settingsInput}
+              type="password"
+              placeholder={
+                hasKey && curProvider === provider
+                  ? '••••••••••••••••••••• (key saved)'
+                  : `${currentProviderInfo?.keyPrefix ?? 'Paste your API key here…'}`
+              }
+              value={apiKey}
+              onChange={e => { setApiKey(e.target.value); setTestState(null) }}
+              onKeyDown={e => e.key === 'Enter' && save()}
+            />
+            <button
+              className={styles.settingsSaveBtn}
+              onClick={save}
+              disabled={saving || (!apiKey && curProvider === provider && curModel === model)}
+            >
+              {saving ? '⏳ Saving…' : 'Save'}
+            </button>
+            {hasKey && curProvider === provider && (
+              <button className={styles.settingsRemoveBtn} onClick={remove} disabled={saving}>
+                Remove
+              </button>
+            )}
+          </div>
+
+          {/* Validation result */}
+          {testState && (
+            <div className={`${styles.testResult} ${
+              testState === 'testing' ? styles.testResultTesting :
+              testState === 'ok'      ? styles.testResultOk :
+              testState === 'warn'    ? styles.testResultWarn :
+                                        styles.testResultError
+            }`}>
+              {testState === 'testing' && <><span className={styles.testSpinner} />Verifying API key…</>}
+              {testState === 'ok'      && <>✓ {testMsg}</>}
+              {testState === 'warn'    && <>⚠ {testMsg}</>}
+              {testState === 'error'   && <>✗ {testMsg}</>}
+            </div>
+          )}
+
+          <p className={styles.settingsNote}>{currentProviderInfo?.keyDesc}</p>
+        </div>
       </div>
 
       {/* How auto-fix works */}
@@ -726,9 +985,9 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
         <div className={styles.settingsSteps}>
           {[
             { n: '1', t: 'BreakShield detects a breaking change', d: 'AST analysis finds removed fields, changed types, or deleted endpoints.' },
-            { n: '2', t: 'Click "Suggest fix with AI"', d: 'The affected file is sent to Gemini with context about what changed.' },
-            { n: '3', t: 'Gemini generates a fix', d: 'The model rewrites only the affected code while preserving all existing logic.' },
-            { n: '4', t: 'Review & merge', d: 'A new PR is created with the fix. You review and merge — no blind auto-merging.' },
+            { n: '2', t: 'Click "Suggest fix with AI"',           d: 'The affected file is sent to your AI provider with context about what changed.' },
+            { n: '3', t: 'AI generates a fix',                    d: 'The model rewrites only the affected code while preserving all existing logic.' },
+            { n: '4', t: 'Review & merge',                        d: 'A new PR is created with the fix. You review and merge — no blind auto-merging.' },
           ].map(s => (
             <div key={s.n} className={styles.settingsStep}>
               <div className={styles.settingsStepNum}>{s.n}</div>

@@ -7,6 +7,108 @@ import styles from './analyze.module.css'
 const INSTALL_URL  = 'https://github.com/apps/breakshield-ci'
 const GITHUB_LOGIN = '/api/auth/login'
 
+// ─── AI Providers & Models ────────────────────────────────────────────────────
+
+type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'perplexity'
+
+const PROVIDERS = [
+  {
+    id: 'gemini' as AIProvider,
+    name: 'Google Gemini',
+    free: true,
+    url: 'https://aistudio.google.com/apikey',
+    keyPrefix: 'AIza…',
+    keyDesc: 'Google AI Studio API key — works with all Gemini models. Free tier gives 1,500 req/day.',
+  },
+  {
+    id: 'openai' as AIProvider,
+    name: 'OpenAI',
+    free: false,
+    url: 'https://platform.openai.com/api-keys',
+    keyPrefix: 'sk-…',
+    keyDesc: 'OpenAI platform API key — works with GPT-5.x, GPT-4o, o3, o4-mini and all other OpenAI models.',
+  },
+  {
+    id: 'anthropic' as AIProvider,
+    name: 'Anthropic Claude',
+    free: false,
+    url: 'https://console.anthropic.com/settings/keys',
+    keyPrefix: 'sk-ant-…',
+    keyDesc: 'Anthropic API key — works with all Claude models (Opus, Sonnet, Haiku).',
+  },
+  {
+    id: 'groq' as AIProvider,
+    name: 'Groq',
+    free: true,
+    url: 'https://console.groq.com/keys',
+    keyPrefix: 'gsk_…',
+    keyDesc: 'GroqCloud API key — works with all Groq-hosted models (Llama, Qwen, GPT-OSS). Free tier available.',
+  },
+  {
+    id: 'perplexity' as AIProvider,
+    name: 'Perplexity',
+    free: false,
+    url: 'https://www.perplexity.ai/settings/api',
+    keyPrefix: 'pplx-…',
+    keyDesc: 'Perplexity API key — works with Sonar, Sonar Pro, Sonar Reasoning Pro and Sonar Deep Research.',
+  },
+] as const
+
+const MODELS: Record<AIProvider, { id: string; name: string; free?: boolean }[]> = {
+  gemini: [
+    { id: 'gemini-3.5-flash',       name: 'Gemini 3.5 Flash',         free: true },
+    { id: 'gemini-3.1-flash-lite',  name: 'Gemini 3.1 Flash-Lite',    free: true },
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (preview)',  free: true },
+    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (preview)' },
+    { id: 'gemini-2.5-pro',         name: 'Gemini 2.5 Pro' },
+    { id: 'gemini-2.5-flash',       name: 'Gemini 2.5 Flash',         free: true },
+    { id: 'gemini-2.5-flash-lite',  name: 'Gemini 2.5 Flash-Lite',    free: true },
+  ],
+  openai: [
+    { id: 'gpt-5.5',       name: 'GPT-5.5' },
+    { id: 'gpt-5.4',       name: 'GPT-5.4' },
+    { id: 'gpt-5.4-mini',  name: 'GPT-5.4 mini' },
+    { id: 'gpt-5.4-nano',  name: 'GPT-5.4 nano' },
+    { id: 'gpt-4o',        name: 'GPT-4o (legacy)' },
+    { id: 'gpt-4.1',       name: 'GPT-4.1 (legacy)' },
+    { id: 'gpt-4.1-mini',  name: 'GPT-4.1 mini (legacy)' },
+    { id: 'o4-mini',       name: 'o4-mini (legacy)' },
+    { id: 'o3',            name: 'o3 (legacy)' },
+  ],
+  anthropic: [
+    { id: 'claude-opus-4-8',           name: 'Claude Opus 4.8' },
+    { id: 'claude-sonnet-4-6',         name: 'Claude Sonnet 4.6' },
+    { id: 'claude-haiku-4-5',          name: 'Claude Haiku 4.5' },
+    { id: 'claude-opus-4-5',           name: 'Claude Opus 4.5' },
+    { id: 'claude-sonnet-4-5',         name: 'Claude Sonnet 4.5' },
+    { id: 'claude-3-7-sonnet-20250219',name: 'Claude 3.7 Sonnet' },
+    { id: 'claude-3-5-sonnet-20241022',name: 'Claude 3.5 Sonnet' },
+    { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
+  ],
+  groq: [
+    { id: 'openai/gpt-oss-120b',                       name: 'OpenAI GPT-OSS 120B',  free: true },
+    { id: 'openai/gpt-oss-20b',                        name: 'OpenAI GPT-OSS 20B',   free: true },
+    { id: 'llama-3.3-70b-versatile',                   name: 'Llama 3.3 70B',         free: true },
+    { id: 'llama-3.1-8b-instant',                      name: 'Llama 3.1 8B Instant',  free: true },
+    { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout 17B',    free: true },
+    { id: 'qwen/qwen3-32b',                            name: 'Qwen3 32B',             free: true },
+  ],
+  perplexity: [
+    { id: 'sonar-deep-research', name: 'Sonar Deep Research' },
+    { id: 'sonar-pro',           name: 'Sonar Pro' },
+    { id: 'sonar-reasoning-pro', name: 'Sonar Reasoning Pro' },
+    { id: 'sonar',               name: 'Sonar' },
+  ],
+}
+
+const DEFAULT_MODELS: Record<AIProvider, string> = {
+  gemini:     'gemini-2.5-flash',
+  openai:     'gpt-5.4-mini',
+  anthropic:  'claude-haiku-4-5',
+  groq:       'llama-3.3-70b-versatile',
+  perplexity: 'sonar',
+}
+
 type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'SAFE'
 
 const RISK: Record<RiskLevel, { color: string; bg: string; border: string; label: string; desc: string }> = {
@@ -66,6 +168,7 @@ export default function AnalyzePage() {
   const [error, setError]     = useState('')
   const [copied, setCopied]   = useState(false)
   const [user, setUser]       = useState<{ login: string; avatarUrl: string } | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
   const resultRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -125,6 +228,11 @@ export default function AnalyzePage() {
         <div className={styles.navRight}>
           <Link href="/blog" className={styles.navLink}>Blog</Link>
           <Link href="/dashboard" className={styles.navLink}>Dashboard</Link>
+          {user && (
+            <button className={styles.navSettingsBtn} onClick={() => setShowSettings(s => !s)}>
+              ⚙ AI Settings
+            </button>
+          )}
           {user ? (
             <div className={styles.navUser}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -151,6 +259,11 @@ export default function AnalyzePage() {
             Paste any GitHub PR URL. BreakShield CI parses the TypeScript AST and finds every breaking change in seconds.
           </p>
         </header>
+
+        {/* ── Settings Panel ── */}
+        {showSettings && user && (
+          <AISettingsPanel onClose={() => setShowSettings(false)} />
+        )}
 
         {/* ── Input card ── */}
         <div className={styles.inputCard}>
@@ -601,4 +714,261 @@ function GH({ size = 14 }: { size?: number }) {
 
 function Spin() {
   return <span style={{ display:'inline-block', width:14, height:14, border:'2px solid rgba(255,255,255,.3)', borderTopColor:'#fff', borderRadius:'50%', animation:'spin .7s linear infinite' }} />
+}
+
+/* ─── AI Settings Panel ──────────────────────────────────────────────────── */
+
+function AISettingsPanel({ onClose }: { onClose: () => void }) {
+  const [provider,    setProvider]    = useState<AIProvider>('gemini')
+  const [model,       setModel]       = useState('')
+  const [apiKey,      setApiKey]      = useState('')
+  const [saving,      setSaving]      = useState(false)
+  const [hasKey,      setHasKey]      = useState(false)
+  const [curProvider, setCurProvider] = useState<string | null>(null)
+  const [curModel,    setCurModel]    = useState<string | null>(null)
+  const [testState,   setTestState]   = useState<null | 'testing' | 'ok' | 'warn' | 'error'>(null)
+  const [testMsg,     setTestMsg]     = useState('')
+
+  const handleProviderChange = (p: AIProvider) => {
+    setProvider(p)
+    setModel(DEFAULT_MODELS[p])
+    setTestState(null)
+  }
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(d => {
+        const p = (d.aiProvider ?? 'gemini') as AIProvider
+        setProvider(p)
+        setCurProvider(d.aiProvider ?? null)
+        setHasKey(!!d.hasApiKey)
+        const m = d.aiModel ?? DEFAULT_MODELS[p] ?? ''
+        setModel(m)
+        setCurModel(d.aiModel ?? null)
+      })
+      .catch(() => {})
+  }, [])
+
+  async function testKey() {
+    if (!apiKey) return
+    setTestState('testing')
+    setTestMsg('')
+    try {
+      const resp = await fetch('/api/settings/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, apiKey }),
+      })
+      const data = await resp.json() as any
+      if (data.ok) {
+        setTestState('ok')
+        setTestMsg('API key is valid and working')
+      } else if (data.warning) {
+        setTestState('warn')
+        setTestMsg(data.error ?? 'Key accepted but has quota/billing issues')
+      } else {
+        setTestState('error')
+        setTestMsg(data.error ?? 'Invalid API key')
+      }
+    } catch {
+      setTestState('error')
+      setTestMsg('Could not reach validation endpoint')
+    }
+  }
+
+  async function save() {
+    if (!apiKey && curProvider === provider && curModel === model) return
+    setSaving(true)
+    setTestState('testing')
+    setTestMsg('')
+
+    // If a new key was provided, test it first
+    if (apiKey) {
+      try {
+        const testResp = await fetch('/api/settings/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, apiKey }),
+        })
+        const testData = await testResp.json() as any
+        if (!testData.ok && !testData.warning) {
+          setTestState('error')
+          setTestMsg(testData.error ?? 'Invalid API key')
+          setSaving(false)
+          return
+        }
+        if (testData.warning) {
+          setTestState('warn')
+          setTestMsg('Key accepted · ' + (testData.error ?? 'quota/billing issue'))
+        }
+      } catch {
+        setTestState('error')
+        setTestMsg('Could not reach validation endpoint')
+        setSaving(false)
+        return
+      }
+    }
+
+    // Save to DB
+    try {
+      const resp = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aiProvider: provider,
+          aiApiKey:   apiKey || undefined,
+          aiModel:    model,
+        }),
+      })
+      if (resp.ok) {
+        if (apiKey) { setHasKey(true); setTestState('ok'); setTestMsg('API key verified and saved') }
+        else { setTestState('ok'); setTestMsg('Settings saved') }
+        setCurProvider(provider)
+        setCurModel(model)
+        setApiKey('')
+        setTimeout(() => setTestState(null), 4000)
+      } else {
+        const d = await resp.json().catch(() => ({})) as any
+        setTestState('error')
+        setTestMsg(d.error ?? 'Failed to save')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function removeKey() {
+    setSaving(true)
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiProvider: provider, aiApiKey: null }),
+      })
+      setHasKey(false)
+      setCurProvider(null)
+      setCurModel(null)
+      setTestState('ok')
+      setTestMsg('API key removed')
+      setTimeout(() => setTestState(null), 3000)
+    } finally { setSaving(false) }
+  }
+
+  const currentProviderInfo = PROVIDERS.find(p => p.id === provider)
+  const currentModels       = MODELS[provider] ?? []
+  const activeModelName     = currentModels.find(m => m.id === curModel)?.name
+
+  return (
+    <div className={styles.settingsPanel}>
+      <div className={styles.settingsHeader}>
+        <div className={styles.settingsHeaderLeft}>
+          <span className={styles.settingsIcon}>⚙</span>
+          <div>
+            <h3 className={styles.settingsTitle}>AI Settings</h3>
+            <p className={styles.settingsSubtitle}>
+              Choose your AI provider and model for auto-fix suggestions.
+              {hasKey && curProvider && (
+                <span className={styles.settingsActiveBadge}>
+                  ✓ {PROVIDERS.find(p => p.id === curProvider)?.name}
+                  {activeModelName ? ` · ${activeModelName}` : ''} active
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        <button className={styles.settingsClose} onClick={onClose} aria-label="Close settings">✕</button>
+      </div>
+
+      {/* Provider tabs */}
+      <div className={styles.providerGrid}>
+        {PROVIDERS.map(p => (
+          <button
+            key={p.id}
+            className={`${styles.providerBtn} ${provider === p.id ? styles.providerBtnActive : ''}`}
+            onClick={() => handleProviderChange(p.id)}
+          >
+            <span className={styles.providerName}>{p.name}</span>
+            {p.free && <span className={styles.providerFree}>Free tier</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Model select */}
+      <div className={styles.settingsField}>
+        <label className={styles.settingsLabel}>Model</label>
+        <select
+          className={styles.settingsSelect}
+          value={model}
+          onChange={e => setModel(e.target.value)}
+        >
+          {currentModels.map(m => (
+            <option key={m.id} value={m.id}>
+              {m.name}{m.free ? ' (free)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* API Key input */}
+      <div className={styles.settingsField}>
+        <label className={styles.settingsLabel}>
+          {currentProviderInfo?.name} API Key
+          {' · '}
+          <a href={currentProviderInfo?.url} target="_blank" rel="noopener" className={styles.settingsLink}>
+            Get key →
+          </a>
+        </label>
+        <div className={styles.settingsInputRow}>
+          <input
+            className={styles.settingsInput}
+            type="password"
+            placeholder={
+              hasKey && curProvider === provider
+                ? '••••••••••••••••••••• (key saved)'
+                : `${currentProviderInfo?.keyPrefix ?? 'Paste your API key here…'}`
+            }
+            value={apiKey}
+            onChange={e => { setApiKey(e.target.value); setTestState(null) }}
+            onKeyDown={e => e.key === 'Enter' && save()}
+          />
+          <button
+            className={styles.settingsTestBtn}
+            onClick={testKey}
+            disabled={!apiKey || testState === 'testing'}
+          >
+            {testState === 'testing' ? '⏳' : '🧪'} Test
+          </button>
+          <button
+            className={styles.settingsSaveBtn}
+            onClick={save}
+            disabled={saving || (!apiKey && curProvider === provider && curModel === model)}
+          >
+            {saving ? '⏳' : '💾'} Save
+          </button>
+          {hasKey && curProvider === provider && (
+            <button className={styles.settingsRemoveBtn} onClick={removeKey} disabled={saving}>
+              Remove
+            </button>
+          )}
+        </div>
+        <p className={styles.settingsNote}>{currentProviderInfo?.keyDesc}</p>
+      </div>
+
+      {/* Validation result */}
+      {testState && (
+        <div className={`${styles.testResult} ${
+          testState === 'testing' ? styles.testResultTesting :
+          testState === 'ok'      ? styles.testResultOk :
+          testState === 'warn'    ? styles.testResultWarn :
+                                    styles.testResultError
+        }`}>
+          {testState === 'testing' && <><Spin /> Verifying API key…</>}
+          {testState === 'ok'      && <>✓ {testMsg}</>}
+          {testState === 'warn'    && <>⚠ {testMsg}</>}
+          {testState === 'error'   && <>✗ {testMsg}</>}
+        </div>
+      )}
+    </div>
+  )
 }

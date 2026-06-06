@@ -4,14 +4,14 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'BreakShield CI — Catch breaking API changes before they ship',
-  description: 'Automatically detects breaking API changes in every pull request. Analyzes TypeScript interfaces and OpenAPI specs with AST-verified evidence. Free during beta.',
-  keywords: ['breaking changes', 'TypeScript', 'API', 'GitHub App', 'CI/CD', 'AST', 'OpenAPI', 'pull request', 'code review', 'developer tools'],
+  description: 'GitHub App that detects breaking API changes in pull requests using AST analysis. AI auto-fix with /fix command. Supports Gemini, OpenAI, Claude, Groq, Perplexity. Free and open-source.',
+  keywords: ['breaking changes', 'TypeScript', 'API', 'GitHub App', 'CI/CD', 'AST', 'OpenAPI', 'pull request', 'code review', 'developer tools', 'AI auto-fix', 'static analysis', 'API contract'],
   authors: [{ name: 'Vojta Holeš' }],
   creator: 'Vojta Holeš',
   metadataBase: new URL('https://breakshield-ci.vercel.app'),
   openGraph: {
     title: 'BreakShield CI — Catch breaking API changes before they ship',
-    description: 'Automatically detects breaking API changes in every pull request. Analyzes TypeScript interfaces and OpenAPI specs with AST-verified evidence.',
+    description: 'GitHub App that detects breaking API changes in PRs using AST analysis. AI auto-fix included. Free and open-source.',
     type: 'website',
     url: 'https://breakshield-ci.vercel.app',
     siteName: 'BreakShield CI',
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'BreakShield CI — Catch breaking API changes before they ship',
-    description: 'Automatically detects breaking API changes in every pull request. Free during beta.',
+    description: 'GitHub App that detects breaking API changes in PRs using AST analysis. AI auto-fix with /fix command. Free and open-source.',
     images: ['/og-image.png'],
     creator: '@vojtispri',
   },
@@ -52,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               '@context': 'https://schema.org',
               '@type': 'SoftwareApplication',
               name: 'BreakShield CI',
-              description: 'GitHub App that automatically detects breaking API changes in pull requests using AST analysis of TypeScript interfaces and OpenAPI specs.',
+              description: 'GitHub App that automatically detects breaking API changes in pull requests using AST analysis. AI auto-fix with /fix command. Supports Gemini, OpenAI, Claude, Groq, Perplexity.',
               url: 'https://breakshield-ci.vercel.app',
               applicationCategory: 'DeveloperApplication',
               operatingSystem: 'GitHub',
@@ -60,7 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 '@type': 'Offer',
                 price: '0',
                 priceCurrency: 'USD',
-                description: 'Free during beta',
+                description: 'Free and open-source',
               },
               author: {
                 '@type': 'Person',

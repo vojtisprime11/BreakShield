@@ -2,13 +2,13 @@
  * app/api/autofix/route.ts
  *
  * Generates an AI fix for a breaking change and creates a GitHub PR.
+ * Reads the user's saved AI provider + key from user_settings (BYOK).
  *
  * POST /api/autofix
  * Body: {
  *   owner, repo, baseBranch, prNumber,
  *   filePath, headSha,
  *   finding: { changeType, affectedValue, description, beforeSchema?, afterSchema? },
- *   userGeminiKey?: string   // BYOK
  * }
  */
 
@@ -16,8 +16,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Octokit } from '@octokit/rest'
 import { getSession } from '@/lib/auth'
 import { getInstallationOctokit } from '@/lib/github/client'
-import { generateFix } from '@/lib/autofix/gemini'
+import { generateFix, AIProvider } from '@/lib/autofix/gemini'
 import { createFixPR } from '@/lib/autofix/pr-creator'
+import { supabaseAdmin } from '@/lib/supabase'
 
 // ─── Fetch file content at a specific ref ─────────────────────────────────────
 
@@ -54,34 +55,66 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     filePath, headSha,
     finding,
     installationId,
-    userGeminiKey,
   } = body
 
   if (!owner || !repo || !filePath || !finding) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  // ── Load user's saved AI provider & key from settings ────────────────────
+  const db = supabaseAdmin()
+  const { data: settings } = await db
+    .from('user_settings')
+    .select('ai_provider, ai_api_key')
+    .eq('github_login', session.login)
+    .single()
+
+  const savedApiKey   = (settings as any)?.ai_api_key  as string | null
+  const savedProvider = (settings as any)?.ai_provider as AIProvider | null
+  const savedModel    = (settings as any)?.ai_model    as string | null
+
+  const resolvedApiKey: string | undefined = savedApiKey ?? undefined
+  const resolvedProvider: AIProvider       = savedProvider ?? 'gemini'
+  const resolvedModel: string | undefined  = savedModel ?? undefined
+
   // ── Get Octokit ──────────────────────────────────────────────────────────
+  // For reading files, use installation token or user token
+  // For creating PRs, prefer installation token > bot token > user token
   let octokit: Octokit
+  let writeOctokit: Octokit
+
   if (installationId) {
     try {
-      octokit = await getInstallationOctokit(installationId) as unknown as Octokit
+      const installOctokit = await getInstallationOctokit(installationId) as unknown as Octokit
+      octokit = installOctokit
+      writeOctokit = installOctokit // installation token has write access if app permissions allow
     } catch {
       octokit = new Octokit({ auth: session.accessToken })
+      const botToken = process.env.GITHUB_BOT_TOKEN
+      writeOctokit = botToken ? new Octokit({ auth: botToken }) : octokit
     }
   } else {
     octokit = new Octokit({ auth: session.accessToken })
+    const botToken = process.env.GITHUB_BOT_TOKEN
+    writeOctokit = botToken ? new Octokit({ auth: botToken }) : octokit
   }
 
   // ── Fetch the file to fix ────────────────────────────────────────────────
-  // Use headSha if provided, otherwise fall back to baseBranch HEAD
   const ref = headSha || baseBranch || 'HEAD'
   const file = await fetchFile(octokit, owner, repo, filePath, ref)
   if (!file) {
     return NextResponse.json({ error: `Could not fetch file: ${filePath}` }, { status: 400 })
   }
 
-  // ── Generate fix with Gemini ─────────────────────────────────────────────
+  // ── Generate fix with selected AI provider ───────────────────────────────
+  const providerNames: Record<AIProvider, string> = {
+    gemini: 'Google Gemini',
+    openai: 'OpenAI',
+    anthropic: 'Anthropic Claude',
+    groq: 'Groq',
+    perplexity: 'Perplexity',
+  }
+
   const fixResult = await generateFix({
     filePath,
     fileContent:   file.content,
@@ -90,21 +123,40 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     description:   finding.description,
     beforeSchema:  finding.beforeSchema,
     afterSchema:   finding.afterSchema,
-    userApiKey:    userGeminiKey,
+    userApiKey:    resolvedApiKey,
+    provider:      resolvedProvider,
+    model:         resolvedModel,
   })
 
   if (!fixResult.ok || !fixResult.fixedCode) {
-    return NextResponse.json({ error: fixResult.error ?? 'Fix generation failed' }, { status: 500 })
+    const providerLabel = providerNames[resolvedProvider] ?? 'AI'
+    const upgradeHint = resolvedProvider === 'gemini'
+      ? ' Try switching to a stronger model like Claude Sonnet 4.6 or GPT-5.4 in ⚙ AI Settings for better results.'
+      : resolvedProvider === 'groq'
+      ? ' Groq models are fast but may struggle with complex fixes. Try Claude Sonnet 4.6 or GPT-5.4 in ⚙ AI Settings.'
+      : resolvedProvider === 'perplexity'
+      ? ' Perplexity models are optimized for search, not code generation. Try Claude Sonnet 4.6 or GPT-5.4 in ⚙ AI Settings.'
+      : resolvedProvider === 'openai'
+      ? ' Try upgrading to GPT-5.5 or Claude Opus 4.8 in ⚙ AI Settings for more complex fixes.'
+      : ' Try a more capable model in ⚙ AI Settings for better results.'
+    return NextResponse.json({
+      error: (fixResult.error ?? `${providerLabel} could not generate a fix.`) + upgradeHint,
+    }, { status: 500 })
   }
 
   // Don't create PR if content is unchanged
   if (fixResult.fixedCode.trim() === file.content.trim()) {
+    const upgradeMsg = resolvedProvider === 'gemini' || resolvedProvider === 'groq'
+      ? 'This model couldn\'t determine a proper fix. For complex breaking changes, configure a stronger AI (Claude Sonnet 4.6 or GPT-5.4) in ⚙ AI Settings — they handle nuanced code rewrites much better.'
+      : 'The AI could not determine a fix for this change. Try a more capable model (Claude Opus 4.8 or GPT-5.5) in ⚙ AI Settings, or fix manually.'
     return NextResponse.json({
-      error: 'Could not generate a fix automatically. The change may require manual intervention.',
+      error: upgradeMsg,
     }, { status: 422 })
   }
 
   // ── Create PR with fix ───────────────────────────────────────────────────
+  const providerLabelForPR = providerNames[resolvedProvider] ?? 'AI'
+
   const prBody = `## BreakShield CI — Auto-fix
 
 This PR was automatically generated to fix a breaking API change detected in PR #${prNumber ?? '?'}.
@@ -125,12 +177,12 @@ ${finding.afterSchema  ? `| **After** | \`${finding.afterSchema}\` |` : ''}
 3. If not, close this PR and fix manually
 
 ---
-*Generated by [BreakShield CI](https://breakshield-ci.vercel.app) using Google Gemini*`
+*Generated by [BreakShield CI](https://breakshield-ci.vercel.app) using ${providerLabelForPR}*`
 
   const prTitle = `fix: [BreakShield] auto-fix ${finding.changeType.replace(/_/g, ' ')} in ${filePath.split('/').pop()}`
 
   const prResult = await createFixPR({
-    octokit,
+    octokit: writeOctokit,
     owner, repo,
     baseBranch: baseBranch ?? 'main',
     filePath,
@@ -141,7 +193,13 @@ ${finding.afterSchema  ? `| **After** | \`${finding.afterSchema}\` |` : ''}
   })
 
   if (!prResult.ok) {
-    return NextResponse.json({ error: prResult.error ?? 'PR creation failed' }, { status: 500 })
+    const msg = prResult.error ?? 'PR creation failed'
+    if (msg.includes('Resource not accessible') || msg.includes('Not Found') || msg.includes('403')) {
+      return NextResponse.json({
+        error: 'GitHub permission denied. Please log out and log back in to grant repo access.',
+      }, { status: 403 })
+    }
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 
   return NextResponse.json({

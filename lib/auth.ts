@@ -79,7 +79,7 @@ export function clearSessionCookie(res: NextResponse): NextResponse {
 export function getGitHubAuthUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID!,
-    scope: 'read:user read:org',
+    scope: 'read:user read:org repo',
     state,
   })
   return `https://github.com/login/oauth/authorize?${params}`

@@ -181,6 +181,10 @@ function renderFinding(finding: Finding, repoFullName: string): string[] {
   }
   lines.push('')
 
+  // Auto-fix hint
+  lines.push(`> 💡 **Auto-fix available** — comment \`/fix ${finding.sourceFile}\` to generate a fix PR, or use the [Dashboard](${APP_URL}/dashboard).`)
+  lines.push('')
+
   // Evidence
   if (finding.evidence.length === 0) {
     lines.push('> ℹ️ _No consumer usages found in this repository._')

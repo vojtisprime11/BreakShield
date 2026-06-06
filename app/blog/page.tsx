@@ -9,6 +9,13 @@ export const metadata: Metadata = {
 
 const posts = [
   {
+    slug: '5-ai-providers-auto-fix',
+    title: '5 AI Providers for Auto-fixing Breaking API Changes',
+    date: 'June 6, 2026',
+    description: 'How BreakShield CI uses Gemini, OpenAI, Claude, Groq, and Perplexity to automatically fix breaking API changes detected in GitHub PRs.',
+    readTime: '6 min read',
+  },
+  {
     slug: '3am-production-incident',
     title: 'The 3am Production Incident That Made Me Build BreakShield CI',
     date: 'June 2, 2026',
